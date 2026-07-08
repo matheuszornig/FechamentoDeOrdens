@@ -28,7 +28,14 @@ describe("helpers de normalização", () => {
     expect(toNumber("string")).toBe(0);
     expect(toNumber(null)).toBe(0);
     expect(toNumber(12.5)).toBe(12.5);
-    expect(toNumber("1.234,56")).toBe(1234.56);
+  });
+
+  it("converte strings numéricas: ponto decimal (API real) e formato BR", () => {
+    expect(toNumber("378.0")).toBe(378); // real: decimal em ponto
+    expect(toNumber("1.26")).toBe(1.26);
+    expect(toNumber("300")).toBe(300);
+    expect(toNumber("1.234,56")).toBe(1234.56); // BR: milhar + vírgula
+    expect(toNumber("-0.13")).toBe(-0.13);
   });
 
   it("normaliza custos com indicador D/C: débito positivo, crédito negativo", () => {
@@ -151,6 +158,120 @@ describe("mapNotesPayload — bov/option", () => {
       qualquer: 1,
     };
     expect(() => mapNotesPayload(extra, "12345", "2026-01-05")).not.toThrow();
+  });
+});
+
+describe("mapNotesPayload — payload real da API (option)", () => {
+  // Estrutura observada na resposta real de 07/07/2026 (dados pessoais
+  // redigidos): números como string com decimal em ponto, indicadores D/C em
+  // bolsaText*/clearText*/correText* e consolidado com titulo + totais por lado.
+  const realPayload = {
+    bov: [],
+    bmf: [],
+    loan: [],
+    option: [
+      {
+        summarizedTradeList: [
+          {
+            precoMedioVenda: "1.26",
+            precoMedioCredito: "1.26",
+            quantidadeTotalVenda: "300",
+            quantidadeTotalCredito: "300",
+            titulo: "VALES795\tON",
+            valorTotalVenda: "378.0",
+            valorTotalCredito: "378.0",
+          },
+        ],
+        ticketInfo: {
+          bolsaDataEmol: "0.13",
+          bolsaTextEmol: "D",
+          clearDataTaxaLiq: "0.1",
+          clearTextTaxaLiq: "D",
+          clearDataTaxaReg: "0.26",
+          clearTextTaxaReg: "D",
+          clearDataTotal: "377.64",
+          clearTextTotal: "C",
+          codCliente: "85-0 004121241",
+          correDataIrrf: "0.01",
+          correDataIss: "0.0",
+          correDataTTA: "0.0",
+          correDataTotal: "0.0",
+          correTextIrrf: "",
+          correTextIss: "",
+          correTextTotal: "",
+          correTextTTA: "",
+          corretDayTrade: "",
+          dataLiqui: "08/07/2026",
+          dataPregao: "07/07/2026",
+          docCliente: "000.000.000-00",
+          liquiData: "377.51",
+          liquiText: "C",
+          nomeCliente: "CLIENTE REDIGIDO",
+          numeroCliente: "004121241",
+          numeroNota: "32963952",
+        },
+        tradeList: [
+          {
+            cV: "V",
+            dC: "C",
+            negociacao: "1-BOVESPA",
+            obs: "",
+            prazo: "07/26",
+            precoAjuste: "1.26",
+            precoAjusteBigDecimal: "1.26",
+            q: "",
+            quantidade: "300",
+            specTitulo: "VALES795\tON",
+            tipoMercado: "OPCAO DE VENDA",
+            valorOperacao: "378.0",
+            valorOperacaoBigDecimal: "378.0",
+          },
+        ],
+      },
+    ],
+  };
+
+  it("mapeia números-string, custos com nomes reais e consolidado por lado", () => {
+    const notes = mapNotesPayload(realPayload, "004121241", "2026-07-07");
+    expect(notes).toHaveLength(1);
+    const note = notes[0];
+    expect(note.market).toBe("option");
+    expect(note.date).toBe("2026-07-07");
+    expect(note.noteNumber).toBe("32963952");
+    expect(note.trades).toEqual([
+      {
+        ticker: "VALES795",
+        side: "sell",
+        quantity: 300,
+        price: 1.26,
+        grossValue: 378,
+        dayTradeHint: false,
+      },
+    ]);
+    expect(note.costs.emolumentos).toBe(0.13);
+    expect(note.costs.liquidacao).toBe(0.1);
+    expect(note.costs.registro).toBe(0.26);
+    expect(note.costs.corretagem).toBe(0);
+    expect(note.irrf).toBe(0.01);
+    expect(note.summary).toEqual([
+      { ticker: "VALES795", quantity: 300, value: 378 },
+    ]);
+  });
+
+  it("não gera alerta de validação cruzada (consolidado bate com os negócios)", async () => {
+    const { apurar } = await import("@/lib/apuracao/engine");
+    const notes = mapNotesPayload(realPayload, "004121241", "2026-07-07");
+    const result = apurar(notes);
+    expect(result.alertas).toEqual([]);
+    expect(result.posicoesAbertas).toEqual([
+      {
+        ticker: "VALES795",
+        mercado: "option",
+        side: "vendido",
+        quantidade: 300,
+        precoMedio: 1.26,
+      },
+    ]);
   });
 });
 

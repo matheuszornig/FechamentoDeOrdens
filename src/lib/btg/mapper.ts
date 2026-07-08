@@ -36,15 +36,21 @@ export function parseTicker(specTitulo: unknown): string | null {
   return ticker || null;
 }
 
-/** Converte para número; placeholders "string", null e NaN viram 0. */
+/**
+ * Converte para número; placeholders "string", null e NaN viram 0.
+ * A API real envia números como string com decimal em PONTO ("378.0",
+ * "1.26"); strings com vírgula são tratadas como formato brasileiro
+ * ("1.234,56").
+ */
 export function toNumber(value: unknown): number {
   if (typeof value === "number") return Number.isFinite(value) ? value : 0;
   if (typeof value === "string") {
     if (value === "string" || value.trim() === "") return 0;
-    const parsed = Number(value.replace(/\./g, "").replace(",", "."));
-    if (Number.isFinite(parsed)) return parsed;
-    const direct = Number(value);
-    return Number.isFinite(direct) ? direct : 0;
+    const normalized = value.includes(",")
+      ? value.replace(/\./g, "").replace(",", ".")
+      : value;
+    const parsed = Number(normalized);
+    return Number.isFinite(parsed) ? parsed : 0;
   }
   return 0;
 }
@@ -108,15 +114,21 @@ function mapBovNote(
     });
   }
 
+  // O payload real usa `titulo` + totais por lado (compra/venda); o formato
+  // da doc usava `specTitulo` + `quantidade`/`valorOperacao`. Aceita ambos.
   const summary: SummaryLine[] = [];
   for (const s of note.summarizedTradeList ?? []) {
-    const ticker = parseTicker(s.specTitulo);
+    const ticker = parseTicker(s.specTitulo ?? s.titulo);
     if (!ticker) continue;
-    summary.push({
-      ticker,
-      quantity: Math.abs(toNumber(s.quantidade)),
-      value: Math.abs(toNumber(s.valorOperacao)),
-    });
+    const quantity =
+      Math.abs(toNumber(s.quantidade)) ||
+      Math.abs(toNumber(s.quantidadeTotalCompra)) +
+        Math.abs(toNumber(s.quantidadeTotalVenda));
+    const value =
+      Math.abs(toNumber(s.valorOperacao)) ||
+      Math.abs(toNumber(s.valorTotalCompra)) +
+        Math.abs(toNumber(s.valorTotalVenda));
+    summary.push({ ticker, quantity, value });
   }
 
   if (trades.length === 0 && !noteNumber) return null;
@@ -129,20 +141,40 @@ function mapBovNote(
     trades,
     adjustments: [],
     loanLines: [],
+    // Indicadores D/C: a doc previa `*DataXText`; o payload real usa
+    // `bolsaTextX`/`clearTextX`/`correTextX`. Aceita ambos.
     costs: {
-      corretagem: normalizeCost(info.correDataTotal, info.correDataTotalText),
-      emolumentos: normalizeCost(info.bolsaDataEmol, info.bolsaDataEmolText),
+      corretagem: normalizeCost(
+        info.correDataTotal,
+        info.correDataTotalText ?? info.correTextTotal,
+      ),
+      emolumentos: normalizeCost(
+        info.bolsaDataEmol,
+        info.bolsaDataEmolText ?? info.bolsaTextEmol,
+      ),
       liquidacao: normalizeCost(
         info.clearDataTaxaLiq,
-        info.clearDataTaxaLiqText,
+        info.clearDataTaxaLiqText ?? info.clearTextTaxaLiq,
       ),
-      registro: normalizeCost(info.clearDataTaxaReg, info.clearDataTaxaRegText),
-      iss: normalizeCost(info.correDataIss, info.correDataIssText),
+      registro: normalizeCost(
+        info.clearDataTaxaReg,
+        info.clearDataTaxaRegText ?? info.clearTextTaxaReg,
+      ),
+      iss: normalizeCost(
+        info.correDataIss,
+        info.correDataIssText ?? info.correTextIss,
+      ),
       pis: normalizeCost(info.pis),
       cofins: normalizeCost(info.cofins),
-      outros: normalizeCost(info.correDataTTA, info.correDataTTAText),
+      outros: normalizeCost(
+        info.correDataTTA,
+        info.correDataTTAText ?? info.correTextTTA,
+      ),
     },
-    irrf: normalizeCost(info.correDataIrrf, info.correDataIrrfText),
+    irrf: normalizeCost(
+      info.correDataIrrf,
+      info.correDataIrrfText ?? info.correTextIrrf,
+    ),
     summary,
   };
 }

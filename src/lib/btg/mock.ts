@@ -66,6 +66,9 @@ type MockTrade = {
   obs: string;
 };
 
+/** Formato real: números viajam como string com decimal em ponto ("378.0"). */
+const s = (n: number) => String(n);
+
 function buildBovLikeNote(
   rand: () => number,
   tickers: Array<[string, string, number]>,
@@ -132,19 +135,28 @@ function buildBovLikeNote(
   }
 
   const volume = trades.reduce((acc, t) => acc + t.valorOperacao, 0);
-  const summarized = new Map<
+
+  // Consolidado por lado (formato real): compra e venda separados.
+  const summarizedBySide = new Map<
     string,
-    { quantidade: number; valorOperacao: number }
+    { qtdCompra: number; qtdVenda: number; valCompra: number; valVenda: number }
   >();
   for (const t of trades) {
     if (t.specTitulo === "string") continue;
-    const cur = summarized.get(t.specTitulo) ?? {
-      quantidade: 0,
-      valorOperacao: 0,
+    const cur = summarizedBySide.get(t.specTitulo) ?? {
+      qtdCompra: 0,
+      qtdVenda: 0,
+      valCompra: 0,
+      valVenda: 0,
     };
-    cur.quantidade += t.quantidade;
-    cur.valorOperacao = round2(cur.valorOperacao + t.valorOperacao);
-    summarized.set(t.specTitulo, cur);
+    if (t.cV === "V") {
+      cur.qtdVenda += t.quantidade;
+      cur.valVenda = round2(cur.valVenda + t.valorOperacao);
+    } else {
+      cur.qtdCompra += t.quantidade;
+      cur.valCompra = round2(cur.valCompra + t.valorOperacao);
+    }
+    summarizedBySide.set(t.specTitulo, cur);
   }
 
   return {
@@ -153,31 +165,48 @@ function buildBovLikeNote(
       dataPregao: toBrDate(isoDate),
       dataLiqui: toBrDate(isoDate),
       numeroCliente: account,
-      codCliente: account,
+      codCliente: `85-0 ${account}`,
       docCliente: "123.456.789-00",
-      bolsaDataEmol: round2(volume * 0.00005),
-      bolsaDataEmolText: "D",
-      clearDataTaxaLiq: round2(volume * 0.00025),
-      clearDataTaxaLiqText: "D",
-      clearDataTaxaReg: 0,
-      clearDataTaxaRegText: "D",
-      correDataTotal: round2(4.5 + volume * 0.0001),
-      correDataTotalText: "D",
-      correDataIss: round2((4.5 + volume * 0.0001) * 0.05),
-      correDataIssText: "D",
-      correDataIrrf: round2(volume * 0.00005),
-      correDataIrrfText: "D",
-      correDataTTA: 0.1,
-      correDataTTAText: "D",
-      pis: round2(volume * 0.0000065),
-      cofins: round2(volume * 0.00003),
-      corretDayTrade: "Corretagem: -R$ 3,00",
+      nomeCliente: "CLIENTE MOCK",
+      bolsaDataEmol: s(round2(volume * 0.00005)),
+      bolsaTextEmol: "D",
+      clearDataTaxaLiq: s(round2(volume * 0.00025)),
+      clearTextTaxaLiq: "D",
+      clearDataTaxaReg: "0.0",
+      clearTextTaxaReg: "D",
+      correDataTotal: s(round2(4.5 + volume * 0.0001)),
+      correTextTotal: "D",
+      correDataIss: s(round2((4.5 + volume * 0.0001) * 0.05)),
+      correTextIss: "D",
+      correDataIrrf: s(round2(volume * 0.00005)),
+      correTextIrrf: "D",
+      correDataTTA: "0.1",
+      correTextTTA: "D",
+      corretDayTrade: "",
     },
-    tradeList: trades,
-    summarizedTradeList: [...summarized.entries()].map(([specTitulo, s]) => ({
-      specTitulo,
-      quantidade: s.quantidade,
-      valorOperacao: s.valorOperacao,
+    tradeList: trades.map((t) => ({
+      cV: t.cV,
+      dC: t.cV === "V" ? "C" : "D",
+      negociacao: "1-BOVESPA",
+      obs: t.obs,
+      quantidade: t.specTitulo === "string" ? "string" : s(t.quantidade),
+      precoAjuste: t.specTitulo === "string" ? "string" : s(t.precoAjuste),
+      specTitulo: t.specTitulo,
+      tipoMercado: t.tipoMercado,
+      valorOperacao: t.specTitulo === "string" ? "string" : s(t.valorOperacao),
+      valorOperacaoBigDecimal:
+        t.specTitulo === "string" ? "string" : s(t.valorOperacao),
+    })),
+    summarizedTradeList: [...summarizedBySide.entries()].map(([titulo, v]) => ({
+      titulo,
+      quantidadeTotalCompra: s(v.qtdCompra),
+      quantidadeTotalVenda: s(v.qtdVenda),
+      valorTotalCompra: s(v.valCompra),
+      valorTotalVenda: s(v.valVenda),
+      precoMedioCompra: s(
+        v.qtdCompra > 0 ? round2(v.valCompra / v.qtdCompra) : 0,
+      ),
+      precoMedioVenda: s(v.qtdVenda > 0 ? round2(v.valVenda / v.qtdVenda) : 0),
     })),
   };
 }

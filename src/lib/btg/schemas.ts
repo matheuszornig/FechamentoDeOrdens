@@ -7,13 +7,10 @@ import { z } from "zod";
  * ficam no mapper.
  */
 
-/** Aceita number, string numérica ou placeholder "string" (docs do BTG). */
-export const tolerantNumber = z.union([
-  z.number(),
-  z.string(),
-  z.null(),
-  z.undefined(),
-]);
+/** Aceita number, string numérica, placeholder "string" ou campo ausente. */
+export const tolerantNumber = z
+  .union([z.number(), z.string(), z.null()])
+  .optional();
 
 export const bovTradeSchema = z.looseObject({
   cV: z.string().optional(),
@@ -33,27 +30,42 @@ export const bovTicketInfoSchema = z.looseObject({
   codCliente: z.union([z.string(), z.number()]).optional(),
   docCliente: z.string().optional(),
   bolsaDataEmol: tolerantNumber,
-  bolsaDataEmolText: z.string().optional(),
   clearDataTaxaLiq: tolerantNumber,
-  clearDataTaxaLiqText: z.string().optional(),
   clearDataTaxaReg: tolerantNumber,
-  clearDataTaxaRegText: z.string().optional(),
   correDataTotal: tolerantNumber,
-  correDataTotalText: z.string().optional(),
   correDataIss: tolerantNumber,
-  correDataIssText: z.string().optional(),
   correDataIrrf: tolerantNumber,
-  correDataIrrfText: z.string().optional(),
   correDataTTA: tolerantNumber,
-  correDataTTAText: z.string().optional(),
   pis: tolerantNumber,
   cofins: tolerantNumber,
+  // Indicadores D/C — nomes previstos na doc…
+  bolsaDataEmolText: z.string().optional(),
+  clearDataTaxaLiqText: z.string().optional(),
+  clearDataTaxaRegText: z.string().optional(),
+  correDataTotalText: z.string().optional(),
+  correDataIssText: z.string().optional(),
+  correDataIrrfText: z.string().optional(),
+  correDataTTAText: z.string().optional(),
+  // …e nomes observados no payload real da API.
+  bolsaTextEmol: z.string().optional(),
+  clearTextTaxaLiq: z.string().optional(),
+  clearTextTaxaReg: z.string().optional(),
+  correTextTotal: z.string().optional(),
+  correTextIss: z.string().optional(),
+  correTextIrrf: z.string().optional(),
+  correTextTTA: z.string().optional(),
 });
 
+/** Formato da doc (specTitulo/quantidade) e formato real (titulo + totais por lado). */
 export const bovSummarizedTradeSchema = z.looseObject({
   specTitulo: z.string().optional(),
   quantidade: tolerantNumber,
   valorOperacao: tolerantNumber,
+  titulo: z.string().optional(),
+  quantidadeTotalCompra: tolerantNumber,
+  quantidadeTotalVenda: tolerantNumber,
+  valorTotalCompra: tolerantNumber,
+  valorTotalVenda: tolerantNumber,
 });
 
 /** Estrutura compartilhada por `bov` (ações à vista) e `option` (opções). */
