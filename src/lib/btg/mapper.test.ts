@@ -7,6 +7,7 @@ import {
   parseBrDate,
   parseTicker,
   prazoToExpiry,
+  stripFractionalSuffix,
   thirdFriday,
   toNumber,
 } from "./mapper";
@@ -25,6 +26,14 @@ describe("helpers de normalização", () => {
     expect(parseTicker("PETR4\tPN N2")).toBe("PETR4");
     expect(parseTicker("CCMF25")).toBe("CCMF25");
     expect(parseTicker("string")).toBeNull();
+  });
+
+  it("junta o ticker do mercado fracionário com o lote cheio", () => {
+    expect(stripFractionalSuffix("PETR4F")).toBe("PETR4");
+    expect(stripFractionalSuffix("VALE3F")).toBe("VALE3");
+    expect(stripFractionalSuffix("ENGI11F")).toBe("ENGI11"); // unit, 2 dígitos
+    expect(stripFractionalSuffix("PETR4")).toBe("PETR4"); // lote cheio, sem mudança
+    expect(stripFractionalSuffix("CCMF25")).toBe("CCMF25"); // futuro, não é fracionário
   });
 
   it("ignora placeholders 'string' sem falhar", () => {
@@ -179,6 +188,79 @@ describe("mapNotesPayload — bov/option", () => {
       qualquer: 1,
     };
     expect(() => mapNotesPayload(extra, "12345", "2026-01-05")).not.toThrow();
+  });
+});
+
+describe("mapNotesPayload — mercado fracionário (bov)", () => {
+  // Nota real: compra no lote cheio (PETR4) e no fracionário (PETR4F) do
+  // mesmo papel, no mesmo dia — o consolidado da nota traz as duas pernas
+  // como entradas separadas, como acontece de fato na B3.
+  const payload = {
+    bov: [
+      {
+        ticketInfo: { numeroNota: "1", dataPregao: "05/01/2026" },
+        tradeList: [
+          {
+            cV: "C",
+            specTitulo: "PETR4\tPN",
+            quantidade: 100,
+            precoAjuste: 38,
+            valorOperacao: 3800,
+            tipoMercado: "VISTA",
+          },
+          {
+            cV: "C",
+            specTitulo: "PETR4F\tPN",
+            quantidade: 37,
+            precoAjuste: 38.1,
+            valorOperacao: 1409.7,
+            tipoMercado: "VISTA",
+          },
+        ],
+        summarizedTradeList: [
+          { specTitulo: "PETR4\tPN", quantidade: 100, valorOperacao: 3800 },
+          { specTitulo: "PETR4F\tPN", quantidade: 37, valorOperacao: 1409.7 },
+        ],
+      },
+    ],
+    option: [],
+    bmf: [],
+    loan: [],
+  };
+
+  it("junta o ticker do fracionário (PETR4F) com o lote cheio (PETR4)", () => {
+    const [note] = mapNotesPayload(payload, "12345", "2026-01-05");
+    expect(note.trades.map((t) => t.ticker)).toEqual(["PETR4", "PETR4"]);
+  });
+
+  it("soma as duas pernas do consolidado sob o mesmo ticker (sem alerta de validação cruzada)", () => {
+    const [note] = mapNotesPayload(payload, "12345", "2026-01-05");
+    expect(note.summary).toEqual([
+      { ticker: "PETR4", quantity: 137, value: 5209.7 },
+    ]);
+  });
+
+  it("não normaliza tickers de opções que terminem em letra (mercado diferente)", () => {
+    const optionPayload = {
+      option: [
+        {
+          ticketInfo: { numeroNota: "2", dataPregao: "05/01/2026" },
+          tradeList: [
+            {
+              cV: "C",
+              specTitulo: "PETRE380F\tPN",
+              quantidade: 100,
+              precoAjuste: 1,
+              valorOperacao: 100,
+              tipoMercado: "OPCAO DE COMPRA",
+            },
+          ],
+        },
+      ],
+    };
+    const [note] = mapNotesPayload(optionPayload, "12345", "2026-01-05");
+    // Fracionário só existe no mercado à vista — em opções o ticker fica intacto.
+    expect(note.trades[0].ticker).toBe("PETRE380F");
   });
 });
 

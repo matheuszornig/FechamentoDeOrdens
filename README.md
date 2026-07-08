@@ -55,7 +55,8 @@ Fluxo 100% **Vercel + Neon** — sem ambiente local, sem Docker.
 5. **Aluguel (loan)**: fora do matching, linha separada (remuneração − taxas − IRRF).
 6. **Idempotente**: chave nº nota + conta + mercado — reprocessar não duplica.
 7. **Validação cruzada** contra o `summarizedTradeList` de cada nota → alertas no job.
-8. Saída: resultado por ticker, custos por ticker/totais por categoria, série diária de P/L (com acumulado, ajustes e aluguel), posições em aberto, taxa de acerto.
+8. **Mercado fracionário**: ticker com sufixo `F` (ex.: `PETR4F`) é o mesmo papel do lote cheio (`PETR4`) com lote menor — o mapper (`stripFractionalSuffix`) junta os dois sob um único ticker antes de chegar ao motor, tanto nos negócios quanto no consolidado da nota (`summarizedTradeList`, somado por ticker para a validação cruzada não disparar falso alerta). Escopo: só no mercado à vista (bov) — séries de opção nunca têm esse sufixo.
+9. Saída: resultado por ticker, custos por ticker/totais por categoria, série diária de P/L (com acumulado, ajustes e aluguel), posições em aberto, taxa de acerto.
 
 Dias úteis = seg–sex; feriados não são modelados de propósito — a API responde 404 nesses dias e a data fica cacheada como vazia (mesmo efeito, sem tabela de feriados).
 

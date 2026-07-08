@@ -36,6 +36,18 @@ export function parseTicker(specTitulo: unknown): string | null {
   return ticker || null;
 }
 
+const FRACTIONAL_SUFFIX_RE = /^([A-Z]{4}\d{1,2})F$/;
+
+/**
+ * Mercado fracionário na B3: código do lote padrão + sufixo "F" (ex.:
+ * "PETR4F" → "PETR4"). É o mesmo ativo, só com lote menor — junta com o
+ * lote cheio sob um único ticker no resultado.
+ */
+export function stripFractionalSuffix(ticker: string): string {
+  const match = ticker.match(FRACTIONAL_SUFFIX_RE);
+  return match ? match[1] : ticker;
+}
+
 /**
  * Converte para número; placeholders "string", null e NaN viram 0.
  * A API real envia números como string com decimal em PONTO ("378.0",
@@ -138,7 +150,13 @@ function mapBovNote(
 
   const trades: NormalizedTrade[] = [];
   for (const t of note.tradeList ?? []) {
-    const ticker = parseTicker(t.specTitulo);
+    const rawTicker = parseTicker(t.specTitulo);
+    // Fracionário (sufixo "F") só existe no mercado à vista (bov) — junta
+    // com o lote cheio do mesmo papel.
+    const ticker =
+      rawTicker && market === "bov"
+        ? stripFractionalSuffix(rawTicker)
+        : rawTicker;
     const quantity = toNumber(t.quantidade);
     if (!ticker || quantity <= 0) continue;
     const price = toNumber(t.precoAjuste);
@@ -183,10 +201,16 @@ function mapBovNote(
 
   // O payload real usa `titulo` + totais por lado (compra/venda); o formato
   // da doc usava `specTitulo` + `quantidade`/`valorOperacao`. Aceita ambos.
-  const summary: SummaryLine[] = [];
+  // Fracionário e lote cheio do mesmo papel viram entradas separadas no
+  // consolidado da nota — soma sob o ticker normalizado para a validação
+  // cruzada (regra 7) não comparar o total das trades (já junto) contra uma
+  // única perna do consolidado.
+  const summaryByTicker = new Map<string, SummaryLine>();
   for (const s of note.summarizedTradeList ?? []) {
-    const ticker = parseTicker(s.specTitulo ?? s.titulo);
-    if (!ticker) continue;
+    const rawTicker = parseTicker(s.specTitulo ?? s.titulo);
+    if (!rawTicker) continue;
+    const ticker =
+      market === "bov" ? stripFractionalSuffix(rawTicker) : rawTicker;
     const quantity =
       Math.abs(toNumber(s.quantidade)) ||
       Math.abs(toNumber(s.quantidadeTotalCompra)) +
@@ -195,8 +219,16 @@ function mapBovNote(
       Math.abs(toNumber(s.valorOperacao)) ||
       Math.abs(toNumber(s.valorTotalCompra)) +
         Math.abs(toNumber(s.valorTotalVenda));
-    summary.push({ ticker, quantity, value });
+    const cur = summaryByTicker.get(ticker) ?? {
+      ticker,
+      quantity: 0,
+      value: 0,
+    };
+    cur.quantity += quantity;
+    cur.value += value;
+    summaryByTicker.set(ticker, cur);
   }
+  const summary = [...summaryByTicker.values()];
 
   if (trades.length === 0 && !noteNumber) return null;
 
