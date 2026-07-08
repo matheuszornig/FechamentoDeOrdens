@@ -36,10 +36,3 @@ export const MERCADO_LABEL: Record<string, string> = {
   bmf: "Futuros",
   loan: "Aluguel",
 };
-
-export const MODALIDADE_LABEL: Record<string, string> = {
-  day_trade: "Day trade",
-  swing: "Swing",
-  mista: "Mista",
-  posicao: "Posição",
-};

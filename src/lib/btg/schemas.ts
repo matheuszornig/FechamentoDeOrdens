@@ -20,6 +20,8 @@ export const bovTradeSchema = z.looseObject({
   valorOperacao: tolerantNumber,
   tipoMercado: z.string().optional(),
   obs: z.string().nullish(),
+  /** Vencimento da opção no formato "MM/YY". */
+  prazo: z.string().optional(),
 });
 
 export const bovTicketInfoSchema = z.looseObject({

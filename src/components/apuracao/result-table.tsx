@@ -31,7 +31,7 @@ import {
 import type { ConsolidatedResult, TickerResult } from "@/lib/apuracao/types";
 import { formatBRL, formatBRLSigned, formatInt, plClass } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import { MERCADO_LABEL, MODALIDADE_LABEL } from "./job-types";
+import { MERCADO_LABEL } from "./job-types";
 
 function SortableHeader({
   label,
@@ -90,12 +90,6 @@ export function ResultTable({ result }: { result: ConsolidatedResult }) {
         ),
       },
       {
-        accessorKey: "modalidade",
-        header: "Modalidade",
-        cell: ({ row }) =>
-          MODALIDADE_LABEL[row.original.modalidade] ?? row.original.modalidade,
-      },
-      {
         accessorKey: "operacoes",
         header: ({ column }) => (
           <SortableHeader label="Operações" column={column} />
@@ -103,6 +97,28 @@ export function ResultTable({ result }: { result: ConsolidatedResult }) {
         cell: ({ row }) => (
           <span className="tabular-nums">
             {formatInt(row.original.operacoes)}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "precoMedioCompra",
+        header: "PM compra",
+        cell: ({ row }) => (
+          <span className="tabular-nums">
+            {row.original.precoMedioCompra !== null
+              ? formatBRL(row.original.precoMedioCompra)
+              : "—"}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "precoMedioVenda",
+        header: "PM venda",
+        cell: ({ row }) => (
+          <span className="tabular-nums">
+            {row.original.precoMedioVenda !== null
+              ? formatBRL(row.original.precoMedioVenda)
+              : "—"}
           </span>
         ),
       },
@@ -217,7 +233,7 @@ export function ResultTable({ result }: { result: ConsolidatedResult }) {
               </TableBody>
               <TableFooter>
                 <TableRow>
-                  <TableCell colSpan={4}>Total</TableCell>
+                  <TableCell colSpan={5}>Total</TableCell>
                   <TableCell
                     className={cn(
                       "tabular-nums",

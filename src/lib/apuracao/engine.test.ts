@@ -268,6 +268,187 @@ describe("futuros (bmf)", () => {
   });
 });
 
+describe("exercício de opções", () => {
+  it("short assignado: opção fecha a 0 (prêmio ganho) e ações abrem ao strike", () => {
+    const result = apurar([
+      // Vende 2500 puts AZZAQ205 @ 0,50 (prêmio recebido).
+      makeNote({
+        market: "option",
+        date: "2026-05-04",
+        trades: [
+          trade({
+            ticker: "AZZAQ205",
+            side: "sell",
+            quantity: 2500,
+            price: 0.5,
+            maturity: "2026-05-15",
+          }),
+        ],
+      }),
+      // Exercício em 15/05: assignado, compra AZZA3 a 20,53 (strike).
+      makeNote({
+        market: "bov",
+        date: "2026-05-15",
+        trades: [
+          {
+            ...trade({
+              ticker: "AZZAQ205E",
+              side: "buy",
+              quantity: 2500,
+              price: 20.53,
+            }),
+            exercise: { optionTicker: "AZZAQ205", underlying: "AZZA3" },
+          },
+        ],
+      }),
+    ]);
+
+    const opcao = result.porTicker.find((t) => t.ticker === "AZZAQ205");
+    expect(opcao?.resultadoBruto).toBe(1250); // 2500 × 0,50 de prêmio
+    // Papel-objeto entra comprado ao strike, sem resultado realizado.
+    expect(result.posicoesAbertas).toEqual([
+      {
+        ticker: "AZZA3",
+        mercado: "bov",
+        side: "comprado",
+        quantidade: 2500,
+        precoMedio: 20.53,
+      },
+    ]);
+    // A série exercida não fica em aberto.
+    expect(
+      result.posicoesAbertas.find((p) => p.ticker.startsWith("AZZAQ")),
+    ).toBeUndefined();
+    expect(result.serieDiaria.at(-1)).toMatchObject({
+      date: "2026-05-15",
+      resultado: 1250,
+    });
+  });
+
+  it("exercício sem posição correspondente gera alerta", () => {
+    const result = apurar([
+      makeNote({
+        market: "bov",
+        date: "2026-05-15",
+        trades: [
+          {
+            ...trade({
+              ticker: "AZZAQ205E",
+              side: "buy",
+              quantity: 2500,
+              price: 20.53,
+            }),
+            exercise: { optionTicker: "AZZAQ205", underlying: "AZZA3" },
+          },
+        ],
+      }),
+    ]);
+    expect(result.alertas.some((a) => a.includes("AZZAQ205"))).toBe(true);
+  });
+});
+
+describe("vencimento de opções", () => {
+  it("short não exercido até o vencimento realiza o prêmio", () => {
+    const result = apurar(
+      [
+        makeNote({
+          market: "option",
+          date: "2026-07-07",
+          trades: [
+            trade({
+              ticker: "VALES795",
+              side: "sell",
+              quantity: 300,
+              price: 1.26,
+              maturity: "2026-07-17",
+            }),
+          ],
+        }),
+      ],
+      { endDate: "2026-07-31" },
+    );
+    const t = result.porTicker.find((x) => x.ticker === "VALES795");
+    expect(t?.resultadoBruto).toBe(378); // 300 × 1,26
+    expect(result.posicoesAbertas).toHaveLength(0);
+    expect(result.serieDiaria.at(-1)).toMatchObject({
+      date: "2026-07-17",
+      resultado: 378,
+    });
+  });
+
+  it("long que vira pó realiza a perda do prêmio", () => {
+    const result = apurar(
+      [
+        makeNote({
+          market: "option",
+          date: "2026-07-07",
+          trades: [
+            trade({
+              ticker: "PETRE380",
+              side: "buy",
+              quantity: 100,
+              price: 2,
+              maturity: "2026-07-17",
+            }),
+          ],
+        }),
+      ],
+      { endDate: "2026-07-31" },
+    );
+    expect(result.porTicker[0].resultadoBruto).toBe(-200);
+    expect(result.posicoesAbertas).toHaveLength(0);
+  });
+
+  it("vencimento fora do período mantém a posição em aberto", () => {
+    const result = apurar(
+      [
+        makeNote({
+          market: "option",
+          date: "2026-07-07",
+          trades: [
+            trade({
+              ticker: "VALES795",
+              side: "sell",
+              quantity: 300,
+              price: 1.26,
+              maturity: "2026-07-17",
+            }),
+          ],
+        }),
+      ],
+      { endDate: "2026-07-10" },
+    );
+    expect(result.porTicker[0].resultadoBruto).toBe(0);
+    expect(result.posicoesAbertas).toHaveLength(1);
+  });
+});
+
+describe("preço médio de compra e venda", () => {
+  it("calcula PM ponderado por lado", () => {
+    const result = apurar([
+      makeNote({
+        date: "2026-01-05",
+        trades: [
+          trade({ side: "buy", quantity: 100, price: 10 }),
+          trade({ side: "buy", quantity: 300, price: 12 }),
+          trade({ side: "sell", quantity: 200, price: 14 }),
+        ],
+      }),
+    ]);
+    const t = result.porTicker[0];
+    expect(t.precoMedioCompra).toBe(11.5); // (100×10 + 300×12) / 400
+    expect(t.precoMedioVenda).toBe(14);
+  });
+
+  it("sem negócios de um lado, PM é null", () => {
+    const result = apurar([
+      makeNote({ trades: [trade({ side: "buy", quantity: 100, price: 10 })] }),
+    ]);
+    expect(result.porTicker[0].precoMedioCompra).toBe(10);
+    expect(result.porTicker[0].precoMedioVenda).toBeNull();
+  });
+});
+
 describe("aluguel (loan)", () => {
   it("entra como linha separada, fora do matching", () => {
     const result = apurar([

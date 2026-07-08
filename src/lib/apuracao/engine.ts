@@ -50,13 +50,20 @@ interface TradeEvent {
   irrf: number;
 }
 
-/** Fechamento realizado (day trade casado ou fechamento swing). */
+/** Fechamento realizado. */
 interface ClosedOperation {
   date: string;
   ticker: string;
-  tipo: "day_trade" | "swing";
+  tipo: "day_trade" | "swing" | "exercicio" | "vencimento";
   quantidade: number;
   bruto: number;
+}
+
+/** Exercício pendente: fecha a série de opção a preço 0 na data do exercício. */
+interface OptionClose {
+  date: string;
+  optionTicker: string;
+  quantity: number;
 }
 
 interface PositionState {
@@ -74,6 +81,11 @@ interface TickerAccumulator {
   dayTradeQty: number;
   swingClosedQty: number;
   costs: CostBreakdown;
+  /** Para preço médio de compra/venda (só negócios reais, não fechamentos a 0). */
+  buyQty: number;
+  buyValue: number;
+  sellQty: number;
+  sellValue: number;
 }
 
 /**
@@ -96,8 +108,18 @@ interface TickerAccumulator {
  *    (evita dupla contagem), apenas atualizam a posição. Day trades de
  *    futuros entram no matching normal.
  * 9. Aluguel (loan) fica fora do matching, como linha separada.
+ * 10. Exercício de opções ("EXERC OPC *"): a linha vira um negócio em ações
+ *     no papel-objeto ao strike, e a série exercida é fechada a preço 0 na
+ *     data do exercício (o prêmio já está no preço médio da posição).
+ * 11. Vencimento de opções: séries com posição aberta cujo vencimento
+ *     (3ª sexta do `prazo`) cai dentro do período são fechadas a preço 0 na
+ *     data do vencimento — prêmio virou resultado (ganho no short, perda no
+ *     long).
  */
-export function apurar(notes: NormalizedNote[]): ConsolidatedResult {
+export function apurar(
+  notes: NormalizedNote[],
+  opts: { endDate?: string } = {},
+): ConsolidatedResult {
   const alertas: string[] = [];
 
   // (7) Idempotência: dedup por nº nota + conta + mercado.
@@ -113,6 +135,8 @@ export function apurar(notes: NormalizedNote[]): ConsolidatedResult {
 
   // (4) Rateio de custos + validação cruzada por nota.
   const events: TradeEvent[] = [];
+  const optionCloses: OptionClose[] = [];
+  const optionMaturities = new Map<string, string>();
   const custosTotais = emptyBreakdown();
   const dailyAdjustments = new Map<string, number>();
   const dailyLoan = new Map<string, number>();
@@ -156,6 +180,43 @@ export function apurar(notes: NormalizedNote[]): ConsolidatedResult {
       for (const key of COST_KEYS) {
         costs[key] = note.costs[key] * fraction;
       }
+
+      // (10) Exercício: perna em ações no papel-objeto + fechamento da série.
+      if (trade.exercise) {
+        optionCloses.push({
+          date: note.date,
+          optionTicker: trade.exercise.optionTicker,
+          quantity: trade.quantity,
+        });
+        if (!trade.exercise.underlying) {
+          alertas.push(
+            `Nota ${note.noteNumber} (${note.date}): exercício de ${trade.exercise.optionTicker} sem papel-objeto derivável — perna em ações não contabilizada.`,
+          );
+          continue;
+        }
+        events.push({
+          date: note.date,
+          market: "bov",
+          ticker: trade.exercise.underlying,
+          side: trade.side,
+          quantity: trade.quantity,
+          price: trade.price, // strike
+          grossValue: trade.grossValue,
+          costs,
+          irrf: note.irrf * fraction,
+        });
+        continue;
+      }
+
+      // (11) Vencimento conhecido da série de opção (3ª sexta do prazo).
+      if (note.market === "option" && trade.maturity) {
+        const key = `option|${trade.ticker}`;
+        const current = optionMaturities.get(key);
+        if (!current || trade.maturity > current) {
+          optionMaturities.set(key, trade.maturity);
+        }
+      }
+
       events.push({
         date: note.date,
         market: note.market,
@@ -206,6 +267,10 @@ export function apurar(notes: NormalizedNote[]): ConsolidatedResult {
         dayTradeQty: 0,
         swingClosedQty: 0,
         costs: emptyBreakdown(),
+        buyQty: 0,
+        buyValue: 0,
+        sellQty: 0,
+        sellValue: 0,
       };
       tickers.set(key, acc);
     }
@@ -233,6 +298,13 @@ export function apurar(notes: NormalizedNote[]): ConsolidatedResult {
     const acc = getAcc(ev.market, ev.ticker);
     acc.operacoes += 1;
     acc.quantidade += ev.quantity;
+    if (ev.side === "buy") {
+      acc.buyQty += ev.quantity;
+      acc.buyValue += ev.grossValue;
+    } else {
+      acc.sellQty += ev.quantity;
+      acc.sellValue += ev.grossValue;
+    }
     for (const key2 of COST_KEYS) {
       acc.costs[key2] += ev.costs[key2];
     }
@@ -345,6 +417,66 @@ export function apurar(notes: NormalizedNote[]): ConsolidatedResult {
     }
   }
 
+  // (10)(11) Fechamento de séries de opção a preço 0. Uma série não negocia
+  // após exercício/vencimento, então aplicar depois do loop principal é
+  // seguro: a posição já está no estado final dos negócios.
+  const closeOptionAtZero = (
+    optionTicker: string,
+    quantity: number | null,
+    date: string,
+    tipo: "exercicio" | "vencimento",
+  ) => {
+    const posKey = `option|${optionTicker}`;
+    const pos = positions.get(posKey);
+    if (!pos || pos.qty === 0) {
+      if (tipo === "exercicio") {
+        alertas.push(
+          `Exercício de ${optionTicker} em ${date} sem posição correspondente no período (posição aberta antes do início?).`,
+        );
+      }
+      return;
+    }
+    const closeQty = Math.min(quantity ?? Math.abs(pos.qty), Math.abs(pos.qty));
+    // Prêmio realizado: short ganha o preço médio, long perde. (0 de saída)
+    const bruto =
+      pos.qty > 0 ? -closeQty * pos.avgPrice : closeQty * pos.avgPrice;
+    const acc = getAcc("option", optionTicker);
+    acc.bruto += bruto;
+    acc.swingClosedQty += closeQty;
+    closedOps.push({
+      date,
+      ticker: optionTicker,
+      tipo,
+      quantidade: closeQty,
+      bruto,
+    });
+    addDaily(date, bruto);
+    pos.qty += pos.qty > 0 ? -closeQty : closeQty;
+    if (pos.qty === 0) pos.avgPrice = 0;
+    positions.set(posKey, pos);
+  };
+
+  for (const close of [...optionCloses].sort((a, b) =>
+    a.date.localeCompare(b.date),
+  )) {
+    closeOptionAtZero(
+      close.optionTicker,
+      close.quantity,
+      close.date,
+      "exercicio",
+    );
+  }
+
+  // Séries ainda abertas cujo vencimento cai dentro do período.
+  const endDate = opts.endDate ?? uniqueNotes.at(-1)?.date ?? "";
+  for (const [posKey, pos] of positions) {
+    if (pos.qty === 0 || pos.market !== "option") continue;
+    const maturity = optionMaturities.get(posKey);
+    if (maturity && maturity <= endDate) {
+      closeOptionAtZero(posKey.split("|")[1], null, maturity, "vencimento");
+    }
+  }
+
   // Ajustes de futuros entram por mercadoria.
   for (const [ticker, value] of tickerAdjustments) {
     const acc = getAcc("bmf", ticker);
@@ -375,6 +507,10 @@ export function apurar(notes: NormalizedNote[]): ConsolidatedResult {
       modalidade,
       operacoes: acc.operacoes,
       quantidade: acc.quantidade,
+      precoMedioCompra:
+        acc.buyQty > 0 ? round2(acc.buyValue / acc.buyQty) : null,
+      precoMedioVenda:
+        acc.sellQty > 0 ? round2(acc.sellValue / acc.sellQty) : null,
       resultadoBruto: round2(acc.bruto),
       ajustesFuturos: round2(acc.ajustes),
       custos: round2(custosTotal),

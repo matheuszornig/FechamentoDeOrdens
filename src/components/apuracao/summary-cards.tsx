@@ -1,15 +1,9 @@
 "use client";
 
-import { Activity, Percent, Receipt, TrendingUp } from "lucide-react";
+import { Activity, Receipt, TrendingUp } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import type { ConsolidatedResult } from "@/lib/apuracao/types";
-import {
-  formatBRL,
-  formatBRLSigned,
-  formatInt,
-  formatPercent,
-  plClass,
-} from "@/lib/format";
+import { formatBRL, formatBRLSigned, formatInt, plClass } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 function StatTile({
@@ -46,7 +40,7 @@ function StatTile({
 export function SummaryCards({ result }: { result: ConsolidatedResult }) {
   const { totais } = result;
   return (
-    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+    <div className="grid gap-4 sm:grid-cols-3">
       <StatTile
         icon={TrendingUp}
         label="Resultado líquido do período"
@@ -65,12 +59,6 @@ export function SummaryCards({ result }: { result: ConsolidatedResult }) {
         label="Operações"
         value={formatInt(totais.operacoes)}
         hint={`${formatInt(totais.operacoesFechadas)} fechadas no período`}
-      />
-      <StatTile
-        icon={Percent}
-        label="Taxa de acerto"
-        value={formatPercent(totais.taxaAcerto)}
-        hint="Operações fechadas com lucro"
       />
     </div>
   );

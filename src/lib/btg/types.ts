@@ -7,6 +7,17 @@
 export type Market = "bov" | "option" | "bmf" | "loan";
 export type Side = "buy" | "sell";
 
+/**
+ * Exercício de opção (tipoMercado "EXERC OPC COMPRA/VENDA"): a linha é a
+ * liquidação em ações ao strike; `optionTicker` é a série exercida (ticker da
+ * linha sem o sufixo "E") e `underlying` o papel-objeto derivado da
+ * especificação (raiz + ON→3/PN→4…), ou null quando não derivável.
+ */
+export interface ExerciseInfo {
+  optionTicker: string;
+  underlying: string | null;
+}
+
 export interface NormalizedTrade {
   ticker: string;
   side: Side;
@@ -16,8 +27,10 @@ export interface NormalizedTrade {
   grossValue: number;
   /** Sinal auxiliar de day trade (obs "D" no bov/option, dC "D" no bmf). */
   dayTradeHint: boolean;
-  /** Vencimento (ISO) — apenas futuros. */
+  /** Vencimento (ISO) — futuros (campo `vencimento`) e opções (3ª sexta do `prazo`). */
   maturity?: string;
+  /** Presente quando a linha é exercício de opção. */
+  exercise?: ExerciseInfo;
 }
 
 /** Ajuste diário de posição de futuros (tipoNegocio AJUPOS) — fora do matching. */

@@ -74,6 +74,48 @@ export function normalizeDoc(value: unknown): string {
   return value.replace(/\D/g, "");
 }
 
+/** 3ª sexta-feira do mês (vencimento padrão de opções na B3), em ISO. */
+export function thirdFriday(year: number, month: number): string {
+  const first = new Date(Date.UTC(year, month - 1, 1));
+  const offset = (5 - first.getUTCDay() + 7) % 7; // dias até a 1ª sexta
+  const day = 1 + offset + 14;
+  return new Date(Date.UTC(year, month - 1, day)).toISOString().slice(0, 10);
+}
+
+/** `prazo` "02/26" → vencimento ISO "2026-02-20" (3ª sexta). */
+export function prazoToExpiry(prazo: unknown): string | null {
+  if (typeof prazo !== "string") return null;
+  const m = prazo.trim().match(/^(\d{2})\/(\d{2})$/);
+  if (!m) return null;
+  return thirdFriday(2000 + Number(m[2]), Number(m[1]));
+}
+
+/** Especificação do papel → sufixo numérico do ticker à vista. */
+const SPEC_SUFFIX: Record<string, string> = {
+  ON: "3",
+  PN: "4",
+  PNA: "5",
+  PNB: "6",
+  PNC: "7",
+  PND: "8",
+  UNT: "11",
+};
+
+/**
+ * Papel-objeto de um exercício: raiz (4 letras) da série + sufixo da
+ * especificação ("AZZAQ205" + "ON" → "AZZA3"). Null quando não derivável.
+ */
+export function deriveUnderlying(
+  optionTicker: string,
+  spec: string | undefined,
+): string | null {
+  const root = optionTicker.slice(0, 4);
+  if (root.length < 4) return null;
+  const specWord = (spec ?? "").trim().split(/\s+/)[0]?.toUpperCase() ?? "";
+  const suffix = SPEC_SUFFIX[specWord];
+  return suffix ? `${root}${suffix}` : null;
+}
+
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
 // ---------------------------------------------------------------------------
@@ -101,7 +143,8 @@ function mapBovNote(
     if (!ticker || quantity <= 0) continue;
     const price = toNumber(t.precoAjuste);
     const grossValue = Math.abs(toNumber(t.valorOperacao)) || quantity * price;
-    trades.push({
+
+    const trade: NormalizedTrade = {
       ticker,
       side: String(t.cV).trim().toUpperCase() === "V" ? "sell" : "buy",
       quantity,
@@ -111,7 +154,31 @@ function mapBovNote(
         String(t.obs ?? "")
           .trim()
           .toUpperCase() === "D",
-    });
+    };
+
+    // Exercício ("EXERC OPC COMPRA/VENDA"): ticker da linha é a série com
+    // sufixo "E" e o preço é o strike da liquidação em ações.
+    if (
+      String(t.tipoMercado ?? "")
+        .toUpperCase()
+        .includes("EXERC")
+    ) {
+      const optionTicker = ticker.endsWith("E") ? ticker.slice(0, -1) : ticker;
+      const spec =
+        typeof t.specTitulo === "string"
+          ? t.specTitulo.split("\t")[1]
+          : undefined;
+      trade.exercise = {
+        optionTicker,
+        underlying: deriveUnderlying(optionTicker, spec),
+      };
+    }
+
+    // Vencimento de opções: 3ª sexta do mês indicado em `prazo`.
+    const expiry = prazoToExpiry(t.prazo);
+    if (expiry) trade.maturity = expiry;
+
+    trades.push(trade);
   }
 
   // O payload real usa `titulo` + totais por lado (compra/venda); o formato

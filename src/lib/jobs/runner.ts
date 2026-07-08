@@ -2,8 +2,8 @@ import { and, eq, gte, inArray, isNull, lt, lte, or } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { listBusinessDays } from "@/lib/apuracao/business-days";
 import { apurar } from "@/lib/apuracao/engine";
+import { mapNotesPayload } from "@/lib/btg/mapper";
 import { getBtgService } from "@/lib/btg/service";
-import type { NormalizedNote } from "@/lib/btg/types";
 
 const ACTIVE_STATUSES = ["pendente", "buscando", "calculando"] as const;
 
@@ -240,8 +240,15 @@ async function runSlice(job: ApuracaoJobRow): Promise<void> {
       ),
     );
 
+  // Re-mapeia do payload bruto: o rawPayload é a fonte da verdade e assim
+  // melhorias do mapper valem retroativamente para notas já cacheadas (o
+  // motor dedup-lica por nº nota + conta + mercado, então payloads completos
+  // repetidos entre linhas do mesmo dia não duplicam nada).
   const result = apurar(
-    noteRows.map((row) => row.normalized as NormalizedNote),
+    noteRows.flatMap((row) =>
+      mapNotesPayload(row.rawPayload, job.accountNumber, row.tradeDate),
+    ),
+    { endDate: job.endDate },
   );
 
   await db

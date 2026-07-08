@@ -12,7 +12,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import type { ApuracaoFilter } from "@/lib/apuracao/validation";
 import { signOut } from "@/lib/auth-client";
 import { CostsTable } from "./costs-table";
-import { DetailsSection } from "./details-section";
 import { FilterCard } from "./filter-card";
 import { isActiveStatus, type JobResponse } from "./job-types";
 import { PlChart } from "./pl-chart";
@@ -178,7 +177,6 @@ export function ApuracaoScreen({ userEmail }: { userEmail: string }) {
           <PlChart data={job.result.serieDiaria} />
           <ResultTable result={job.result} />
           <CostsTable result={job.result} />
-          <DetailsSection result={job.result} />
         </>
       )}
 

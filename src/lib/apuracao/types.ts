@@ -10,6 +10,10 @@ export interface TickerResult {
   operacoes: number;
   /** Quantidade total negociada. */
   quantidade: number;
+  /** Preço médio das compras do período (null sem compras). */
+  precoMedioCompra: number | null;
+  /** Preço médio das vendas do período (null sem vendas). */
+  precoMedioVenda: number | null;
   resultadoBruto: number;
   /** Ajustes diários de futuros (AJUPOS) atribuídos à mercadoria. */
   ajustesFuturos: number;

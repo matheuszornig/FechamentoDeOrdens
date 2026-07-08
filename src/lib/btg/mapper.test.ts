@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
+  deriveUnderlying,
   mapNotesPayload,
   normalizeCost,
   normalizeDoc,
   parseBrDate,
   parseTicker,
+  prazoToExpiry,
+  thirdFriday,
   toNumber,
 } from "./mapper";
 
@@ -48,6 +51,24 @@ describe("helpers de normalização", () => {
   it("remove máscara de CPF/CNPJ", () => {
     expect(normalizeDoc("123.456.789-00")).toBe("12345678900");
     expect(normalizeDoc("12.345.678/0001-90")).toBe("12345678000190");
+  });
+
+  it("calcula a 3ª sexta-feira (vencimento B3)", () => {
+    // Datas reais de exercício observadas no payload do BTG.
+    expect(thirdFriday(2026, 2)).toBe("2026-02-20");
+    expect(thirdFriday(2026, 5)).toBe("2026-05-15");
+    expect(thirdFriday(2026, 7)).toBe("2026-07-17");
+    expect(prazoToExpiry("02/26")).toBe("2026-02-20");
+    expect(prazoToExpiry("")).toBeNull();
+    expect(prazoToExpiry("string")).toBeNull();
+  });
+
+  it("deriva o papel-objeto do exercício pela raiz + especificação", () => {
+    expect(deriveUnderlying("AZZAQ205", "ON")).toBe("AZZA3");
+    expect(deriveUnderlying("ASAIB769", "ON")).toBe("ASAI3");
+    expect(deriveUnderlying("PETRE380", "PN N2")).toBe("PETR4");
+    expect(deriveUnderlying("VALES795", "UNT")).toBe("VALE11");
+    expect(deriveUnderlying("AZZAQ205", "XX")).toBeNull();
   });
 });
 
@@ -246,6 +267,7 @@ describe("mapNotesPayload — payload real da API (option)", () => {
         price: 1.26,
         grossValue: 378,
         dayTradeHint: false,
+        maturity: "2026-07-17", // 3ª sexta do prazo "07/26"
       },
     ]);
     expect(note.costs.emolumentos).toBe(0.13);
@@ -272,6 +294,86 @@ describe("mapNotesPayload — payload real da API (option)", () => {
         precoMedio: 1.26,
       },
     ]);
+  });
+});
+
+describe("mapNotesPayload — exercício de opções (payload real)", () => {
+  // Linhas reais observadas: ticker com sufixo "E", preço = strike.
+  const payload = {
+    bov: [
+      {
+        ticketInfo: {
+          numeroNota: "31971366",
+          dataPregao: "15/05/2026",
+          numeroCliente: "004121241",
+        },
+        tradeList: [
+          {
+            cV: "C",
+            dC: "D",
+            obs: "",
+            prazo: "",
+            quantidade: "2500",
+            specTitulo: "AZZAQ205E\tON",
+            precoAjuste: "20.53",
+            tipoMercado: "EXERC OPC VENDA",
+            valorOperacao: "51325.0",
+          },
+          {
+            cV: "V",
+            dC: "C",
+            obs: "",
+            prazo: "",
+            quantidade: "2500",
+            specTitulo: "AZZAQ210E\tON",
+            precoAjuste: "21.03",
+            tipoMercado: "EXERC OPC VENDA",
+            valorOperacao: "52575.0",
+          },
+        ],
+      },
+    ],
+  };
+
+  it("marca a linha como exercício com série e papel-objeto", () => {
+    const [note] = mapNotesPayload(payload, "004121241", "2026-05-15");
+    expect(note.trades).toHaveLength(2);
+    expect(note.trades[0]).toMatchObject({
+      ticker: "AZZAQ205E",
+      side: "buy",
+      quantity: 2500,
+      price: 20.53,
+      exercise: { optionTicker: "AZZAQ205", underlying: "AZZA3" },
+    });
+    expect(note.trades[1]).toMatchObject({
+      ticker: "AZZAQ210E",
+      side: "sell",
+      exercise: { optionTicker: "AZZAQ210", underlying: "AZZA3" },
+    });
+  });
+
+  it("opções ganham vencimento (3ª sexta) a partir do prazo", () => {
+    const optionPayload = {
+      option: [
+        {
+          ticketInfo: { numeroNota: "1", dataPregao: "05/01/2026" },
+          tradeList: [
+            {
+              cV: "V",
+              quantidade: "300",
+              specTitulo: "VALES795\tON",
+              precoAjuste: "1.26",
+              tipoMercado: "OPCAO DE VENDA",
+              valorOperacao: "378.0",
+              prazo: "07/26",
+            },
+          ],
+        },
+      ],
+    };
+    const [note] = mapNotesPayload(optionPayload, "004121241", "2026-01-05");
+    expect(note.trades[0].maturity).toBe("2026-07-17");
+    expect(note.trades[0].exercise).toBeUndefined();
   });
 });
 
