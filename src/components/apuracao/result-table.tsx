@@ -28,6 +28,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { computeClosedTotals, isFechado } from "@/lib/apuracao/closed-totals";
 import type { ConsolidatedResult, TickerResult } from "@/lib/apuracao/types";
 import { formatBRL, formatBRLSigned, formatInt, plClass } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -65,29 +66,15 @@ export function ResultTable({ result }: { result: ConsolidatedResult }) {
   ]);
 
   // Só operações com algo de fato fechado no período — posições apenas
-  // abertas (nada casado/exercido/vencido) não entram nesta tabela. Futuros
-  // só com ajuste diário (sem negócio no período) ficam de fora do filtro:
-  // o ajuste já é resultado realizado em caixa, mesmo sem quantidade fechada.
+  // abertas (nada casado/exercido/vencido) não entram nesta tabela.
   const rows = useMemo(
-    () =>
-      result.porTicker.filter(
-        (t) => t.quantidadeFechada !== 0 || t.ajustesFuturos !== 0,
-      ),
+    () => result.porTicker.filter(isFechado),
     [result.porTicker],
   );
 
-  const totais = useMemo(
-    () =>
-      rows.reduce(
-        (acc, t) => ({
-          bruto: acc.bruto + t.resultadoBruto + t.ajustesFuturos,
-          custos: acc.custos + t.custos,
-          liquido: acc.liquido + t.resultadoLiquido,
-        }),
-        { bruto: 0, custos: 0, liquido: 0 },
-      ),
-    [rows],
-  );
+  // Mesma base usada nos cards de resumo (computeClosedTotals) — o rodapé
+  // desta tabela e os cards do topo sempre batem.
+  const totais = useMemo(() => computeClosedTotals(result), [result]);
 
   const columns = useMemo<ColumnDef<TickerResult>[]>(
     () => [

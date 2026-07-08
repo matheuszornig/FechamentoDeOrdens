@@ -2,6 +2,7 @@
 
 import { Activity, Receipt, TrendingUp } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
+import { computeClosedTotals } from "@/lib/apuracao/closed-totals";
 import type { ConsolidatedResult } from "@/lib/apuracao/types";
 import { formatBRL, formatBRLSigned, formatInt, plClass } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -39,20 +40,25 @@ function StatTile({
 
 export function SummaryCards({ result }: { result: ConsolidatedResult }) {
   const { totais } = result;
+  // Mesma base da tabela "Resultado fechado por ticker" (só o que fechou no
+  // período) — este card bate com o rodapé dessa tabela. Difere de
+  // `totais.resultadoLiquido`, que soma o período inteiro (posições ainda
+  // abertas + aluguel).
+  const fechados = computeClosedTotals(result);
   return (
     <div className="grid gap-4 sm:grid-cols-3">
       <StatTile
         icon={TrendingUp}
         label="Resultado líquido do período"
-        value={formatBRLSigned(totais.resultadoLiquido)}
-        valueClass={plClass(totais.resultadoLiquido)}
-        hint={`Bruto: ${formatBRLSigned(totais.resultadoBruto)}`}
+        value={formatBRLSigned(fechados.liquido)}
+        valueClass={plClass(fechados.liquido)}
+        hint={`Bruto: ${formatBRLSigned(fechados.bruto)}`}
       />
       <StatTile
         icon={Receipt}
         label="Custos totais"
-        value={formatBRL(totais.custos)}
-        hint={`IRRF retido: ${formatBRL(totais.irrf)}`}
+        value={formatBRL(fechados.custos)}
+        hint={`IRRF retido: ${formatBRL(fechados.irrf)}`}
       />
       <StatTile
         icon={Activity}
