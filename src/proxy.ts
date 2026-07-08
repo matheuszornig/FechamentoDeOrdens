@@ -9,6 +9,9 @@ import { type NextRequest, NextResponse } from "next/server";
 export function proxy(request: NextRequest) {
   const sessionCookie = getSessionCookie(request);
   if (!sessionCookie) {
+    if (request.nextUrl.pathname.startsWith("/api/")) {
+      return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+    }
     return NextResponse.redirect(new URL("/login", request.url));
   }
   return NextResponse.next();
