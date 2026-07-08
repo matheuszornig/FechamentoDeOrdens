@@ -163,18 +163,25 @@ export function ResultTable({ result }: { result: ConsolidatedResult }) {
         ),
       },
       {
-        id: "percentual",
-        header: "% do total",
-        cell: ({ row }) => {
-          const pct =
-            totalLiquido !== 0
-              ? (row.original.resultadoLiquido / totalLiquido) * 100
-              : 0;
-          return <span className="tabular-nums">{pct.toFixed(1)}%</span>;
+        id: "custosSobreLucro",
+        accessorFn: (row) => {
+          const bruto = row.resultadoBruto + row.ajustesFuturos;
+          return bruto !== 0 ? row.custos / Math.abs(bruto) : null;
+        },
+        header: ({ column }) => (
+          <SortableHeader label="Custos/Lucro" column={column} />
+        ),
+        cell: ({ getValue }) => {
+          const ratio = getValue<number | null>();
+          return (
+            <span className="tabular-nums">
+              {ratio !== null ? `${(ratio * 100).toFixed(1)}%` : "—"}
+            </span>
+          );
         },
       },
     ],
-    [totalLiquido],
+    [],
   );
 
   const table = useReactTable({
@@ -253,7 +260,11 @@ export function ResultTable({ result }: { result: ConsolidatedResult }) {
                   >
                     {formatBRLSigned(totalLiquido)}
                   </TableCell>
-                  <TableCell className="tabular-nums">100%</TableCell>
+                  <TableCell className="tabular-nums">
+                    {result.totais.resultadoBruto !== 0
+                      ? `${((result.totais.custos / Math.abs(result.totais.resultadoBruto)) * 100).toFixed(1)}%`
+                      : "—"}
+                  </TableCell>
                 </TableRow>
               </TableFooter>
             </Table>
