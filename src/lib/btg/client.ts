@@ -99,7 +99,12 @@ export class BtgClient implements BtgService {
     });
 
     if (!res.ok) {
-      throw new Error(`Falha ao obter token BTG: ${res.status}`);
+      // O corpo costuma trazer o motivo (ex.: invalid_client) — ajuda a
+      // distinguir credencial errada de ambiente errado.
+      const body = await res.text().catch(() => "");
+      throw new Error(
+        `Falha ao obter token BTG: ${res.status}${body ? ` — ${body.slice(0, 300)}` : ""}`,
+      );
     }
 
     // O BTG retorna o token nos HEADERS da resposta, não no body.
