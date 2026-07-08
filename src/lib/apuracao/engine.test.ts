@@ -4,7 +4,7 @@ import {
   type NormalizedNote,
   type NormalizedTrade,
 } from "@/lib/btg/types";
-import { apurar } from "./engine";
+import { apurar, dedupeNotes } from "./engine";
 
 let noteSeq = 0;
 
@@ -520,6 +520,26 @@ describe("idempotência", () => {
     });
     const result = apurar([bov, option]);
     expect(result.porTicker).toHaveLength(2);
+  });
+});
+
+describe("dedupeNotes", () => {
+  it("remove cópias da mesma nota (nº nota + conta + mercado), ordenado por data", () => {
+    const note = makeNote({ noteNumber: "31381536", date: "2026-04-15" });
+    const earlier = makeNote({ noteNumber: "1", date: "2026-01-05" });
+    // Simula o cenário real: rawPayload é armazenado por dia e replicado em
+    // toda linha extraída daquele dia — re-mapear várias linhas do mesmo dia
+    // sem dedup gera N cópias idênticas da mesma nota.
+    const copies = Array.from({ length: 12 }, () => structuredClone(note));
+    const deduped = dedupeNotes([...copies, earlier]);
+    expect(deduped).toHaveLength(2);
+    expect(deduped.map((n) => n.date)).toEqual(["2026-01-05", "2026-04-15"]);
+  });
+
+  it("preserva notas de mercados diferentes com o mesmo número", () => {
+    const bov = makeNote({ noteNumber: "111", market: "bov" });
+    const option = makeNote({ noteNumber: "111", market: "option" });
+    expect(dedupeNotes([bov, option])).toHaveLength(2);
   });
 });
 

@@ -63,6 +63,17 @@ Dias úteis = seg–sex; feriados não são modelados de propósito — a API re
 
 Notas fictícias **no formato real do payload** (bov, option, bmf com AJUPOS, loan), **determinísticas por seed (conta+data)** — a mesma consulta devolve sempre as mesmas notas — incluindo ~30% de dias com **404 (sem notas)** e linhas-placeholder `"string"` para exercitar cache e mapper. Permite demonstrar o fluxo completo (barra de progresso, gráfico, tabelas) sem credenciais reais.
 
+### 7. Exportação para Excel (teste e auditoria)
+
+Com o job concluído, o botão **"Exportar Excel"** baixa um `.xlsx` (`GET /api/apuracao/[id]/export`, `src/lib/export/xlsx-export.ts`) com uma aba por dimensão dos dados, números crus (não formatados como moeda) para conferência e cálculo em planilha:
+
+- **Resumo** — conta, período, totais e resumo do aluguel
+- **Negócios** — uma linha por negócio de todas as notas do período (ticker, lado, quantidade, preço, valor bruto, day trade, vencimento, exercício de opção e papel-objeto)
+- **Aluguel**, **Ajustes Futuros** (se houver AJUPOS), **Custos por Nota**
+- **Resultado por Ticker**, **Custos por Ticker**, **Série Diária**, **Posições Abertas**, **Alertas** (as duas últimas só aparecem se não vazias)
+
+As notas são **re-mapeadas do `rawPayload`** salvo no banco (a mesma fonte que o job usa para calcular) e passam pela mesma função de deduplicação do motor (`dedupeNotes`, regra 7 — nº nota + conta + mercado) antes de virar planilha. Isso é necessário porque `rawPayload` é a resposta **do dia inteiro**, replicada em toda linha de `brokerage_note` extraída daquele dia — sem esse dedup, a aba "Negócios" mostraria a mesma nota repetida uma vez por linha lida. O total de linhas da aba "Negócios" bate, célula a célula, com "Operações totais" da aba Resumo — a mesma garantia de consistência que a tela usa.
+
 ## Deploy na Vercel (Vercel-first, sem setup local)
 
 1. **Crie o repositório no GitHub e conecte-o na Vercel** (Add New → Project). Preview em cada PR, produção na `main`.

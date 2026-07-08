@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { LogOut } from "lucide-react";
+import { Download, LogOut } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -90,6 +90,29 @@ export function ApuracaoScreen({ userEmail }: { userEmail: string }) {
     },
   });
 
+  const exportXlsx = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`/api/apuracao/${jobId}/export`);
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        throw new Error(body?.error ?? `Erro ${res.status}`);
+      }
+      const disposition = res.headers.get("Content-Disposition") ?? "";
+      const filename =
+        disposition.match(/filename="([^"]+)"/)?.[1] ?? "apuracao.xlsx";
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+    },
+    onError: (err) => {
+      toast.error("Não foi possível exportar", { description: err.message });
+    },
+  });
+
   const job = jobQuery.data;
 
   // Toasts de desfecho (uma vez por job).
@@ -173,6 +196,17 @@ export function ApuracaoScreen({ userEmail }: { userEmail: string }) {
               determinísticas, não vieram da API do BTG.
             </div>
           )}
+          <div className="flex justify-end">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => exportXlsx.mutate()}
+              disabled={exportXlsx.isPending}
+            >
+              <Download className="mr-1 size-4" aria-hidden />
+              {exportXlsx.isPending ? "Exportando…" : "Exportar Excel"}
+            </Button>
+          </div>
           <SummaryCards result={job.result} />
           <PlChart data={job.result.serieDiaria} />
           <ResultTable result={job.result} />

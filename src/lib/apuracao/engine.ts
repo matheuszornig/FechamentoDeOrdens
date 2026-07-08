@@ -116,13 +116,16 @@ interface TickerAccumulator {
  *     data do vencimento — prêmio virou resultado (ganho no short, perda no
  *     long).
  */
-export function apurar(
-  notes: NormalizedNote[],
-  opts: { endDate?: string } = {},
-): ConsolidatedResult {
-  const alertas: string[] = [];
-
-  // (7) Idempotência: dedup por nº nota + conta + mercado.
+/**
+ * (7) Idempotência: dedup por nº nota + conta + mercado, ordenado por data.
+ *
+ * Necessário mesmo fora do motor: `rawPayload` é armazenado por dia (a
+ * resposta inteira da API), replicado em toda linha de `brokerage_note`
+ * extraída daquele dia — recompor notas a partir de várias linhas do mesmo
+ * dia sem dedup gera múltiplas cópias da mesma nota (uma por linha lida).
+ * Usada pelo motor e pela exportação, para as duas verem os mesmos dados.
+ */
+export function dedupeNotes(notes: NormalizedNote[]): NormalizedNote[] {
   const seen = new Set<string>();
   const uniqueNotes: NormalizedNote[] = [];
   for (const note of notes) {
@@ -132,6 +135,16 @@ export function apurar(
     uniqueNotes.push(note);
   }
   uniqueNotes.sort((a, b) => a.date.localeCompare(b.date));
+  return uniqueNotes;
+}
+
+export function apurar(
+  notes: NormalizedNote[],
+  opts: { endDate?: string } = {},
+): ConsolidatedResult {
+  const alertas: string[] = [];
+
+  const uniqueNotes = dedupeNotes(notes);
 
   // (4) Rateio de custos + validação cruzada por nota.
   const events: TradeEvent[] = [];
