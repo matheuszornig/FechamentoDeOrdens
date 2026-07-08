@@ -92,7 +92,7 @@ describe("BtgClient.getToken", () => {
 });
 
 describe("BtgClient.fetchNotes", () => {
-  it("envia access_token como header próprio e UUID novo a cada requisição", async () => {
+  it("envia access_token como header próprio e o x-id-pactual do token como x-id-partner-request", async () => {
     const partnerIds: string[] = [];
     const fetchFn = vi.fn(async (url: string, init?: RequestInit) => {
       if (url === TOKEN_URL) return tokenResponse();
@@ -111,9 +111,28 @@ describe("BtgClient.fetchNotes", () => {
     await client.fetchNotes("12345", "2026-01-05");
     await client.fetchNotes("12345", "2026-01-05");
 
-    expect(partnerIds).toHaveLength(2);
-    expect(partnerIds[0]).not.toBe(partnerIds[1]); // UUID novo por requisição
-    expect(new Set(partnerIds).size).toBe(2);
+    // Fluxo real: o x-id-partner-request das notas é o x-id-pactual emitido
+    // com o token (correlação da sessão), não um UUID aleatório.
+    expect(partnerIds).toEqual(["pactual-1", "pactual-1"]);
+  });
+
+  it("gera UUID como fallback quando o token não trouxe x-id-pactual", async () => {
+    const partnerIds: string[] = [];
+    const fetchFn = vi.fn(async (url: string, init?: RequestInit) => {
+      if (url === TOKEN_URL) {
+        return new Response("", {
+          status: 200,
+          headers: { access_token: "tok-1", Expires: "900" },
+        });
+      }
+      const headers = init?.headers as Record<string, string>;
+      partnerIds.push(headers["x-id-partner-request"]);
+      return notesResponse();
+    });
+    const client = makeClient(fetchFn as unknown as typeof fetch);
+
+    await client.fetchNotes("12345", "2026-01-05");
+    expect(partnerIds[0]).toMatch(/^[0-9a-f-]{36}$/);
   });
 
   it("trata 404 como dia sem notas (não é erro, sem retry)", async () => {

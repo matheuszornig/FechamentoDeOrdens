@@ -140,8 +140,10 @@ export class BtgClient implements BtgService {
           headers: {
             // Header próprio `access_token`, NÃO `Authorization: Bearer`.
             access_token: token.accessToken,
-            // UUID v4 novo a cada requisição, mesmo repetindo parâmetros.
-            "x-id-partner-request": crypto.randomUUID(),
+            // Fluxo real observado (script de referência do parceiro): o
+            // x-id-partner-request das notas é o x-id-pactual devolvido junto
+            // com o token — não um UUID aleatório como a doc sugeria.
+            "x-id-partner-request": token.xIdPactual || crypto.randomUUID(),
             "Content-Type": "application/json",
           },
           body: JSON.stringify({ date: isoDate, accountNumber }),
