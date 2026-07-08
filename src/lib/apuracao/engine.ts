@@ -117,7 +117,12 @@ export function apurar(notes: NormalizedNote[]): ConsolidatedResult {
   const dailyAdjustments = new Map<string, number>();
   const dailyLoan = new Map<string, number>();
   const tickerAdjustments = new Map<string, number>();
-  const aluguel: AluguelSummary = { taxas: 0, remuneracao: 0, irrf: 0, liquido: 0 };
+  const aluguel: AluguelSummary = {
+    taxas: 0,
+    remuneracao: 0,
+    irrf: 0,
+    liquido: 0,
+  };
 
   for (const note of uniqueNotes) {
     for (const key of COST_KEYS) {
@@ -126,8 +131,14 @@ export function apurar(notes: NormalizedNote[]): ConsolidatedResult {
     custosTotais.irrf += note.irrf;
 
     for (const adj of note.adjustments) {
-      dailyAdjustments.set(note.date, (dailyAdjustments.get(note.date) ?? 0) + adj.value);
-      tickerAdjustments.set(adj.ticker, (tickerAdjustments.get(adj.ticker) ?? 0) + adj.value);
+      dailyAdjustments.set(
+        note.date,
+        (dailyAdjustments.get(note.date) ?? 0) + adj.value,
+      );
+      tickerAdjustments.set(
+        adj.ticker,
+        (tickerAdjustments.get(adj.ticker) ?? 0) + adj.value,
+      );
     }
 
     for (const line of note.loanLines) {
@@ -248,12 +259,20 @@ export function apurar(notes: NormalizedNote[]): ConsolidatedResult {
 
       // (1) Day trade: quantidade casada no próprio pregão.
       if (matched > 0) {
-        const avgBuy = buys.reduce((a, e) => a + e.price * e.quantity, 0) / buyQty;
-        const avgSell = sells.reduce((a, e) => a + e.price * e.quantity, 0) / sellQty;
+        const avgBuy =
+          buys.reduce((a, e) => a + e.price * e.quantity, 0) / buyQty;
+        const avgSell =
+          sells.reduce((a, e) => a + e.price * e.quantity, 0) / sellQty;
         const bruto = matched * (avgSell - avgBuy);
         acc.bruto += bruto;
         acc.dayTradeQty += matched * 2;
-        closedOps.push({ date, ticker, tipo: "day_trade", quantidade: matched, bruto });
+        closedOps.push({
+          date,
+          ticker,
+          tipo: "day_trade",
+          quantidade: matched,
+          bruto,
+        });
         addDaily(date, bruto);
       }
 
@@ -263,7 +282,11 @@ export function apurar(notes: NormalizedNote[]): ConsolidatedResult {
       const posKey = key;
       const pos = positions.get(posKey) ?? { market, qty: 0, avgPrice: 0 };
 
-      const applyToPosition = (side: "buy" | "sell", qty: number, price: number) => {
+      const applyToPosition = (
+        side: "buy" | "sell",
+        qty: number,
+        price: number,
+      ) => {
         if (qty <= 0) return;
         const signed = side === "buy" ? qty : -qty;
 
@@ -287,7 +310,13 @@ export function apurar(notes: NormalizedNote[]): ConsolidatedResult {
         if (market !== "bmf") {
           acc.bruto += bruto;
           acc.swingClosedQty += closeQty;
-          closedOps.push({ date, ticker, tipo: "swing", quantidade: closeQty, bruto });
+          closedOps.push({
+            date,
+            ticker,
+            tipo: "swing",
+            quantidade: closeQty,
+            bruto,
+          });
           addDaily(date, bruto);
         }
 
@@ -303,11 +332,13 @@ export function apurar(notes: NormalizedNote[]): ConsolidatedResult {
       };
 
       if (leftoverBuy > 0) {
-        const avgBuy = buys.reduce((a, e) => a + e.price * e.quantity, 0) / buyQty;
+        const avgBuy =
+          buys.reduce((a, e) => a + e.price * e.quantity, 0) / buyQty;
         applyToPosition("buy", leftoverBuy, avgBuy);
       }
       if (leftoverSell > 0) {
-        const avgSell = sells.reduce((a, e) => a + e.price * e.quantity, 0) / sellQty;
+        const avgSell =
+          sells.reduce((a, e) => a + e.price * e.quantity, 0) / sellQty;
         applyToPosition("sell", leftoverSell, avgSell);
       }
       positions.set(posKey, pos);
@@ -409,7 +440,10 @@ export function apurar(notes: NormalizedNote[]): ConsolidatedResult {
   aluguel.liquido = aluguel.remuneracao - aluguel.taxas - aluguel.irrf;
 
   const totalCustos = COST_KEYS.reduce((a, k) => a + custosTotais[k], 0);
-  const resultadoBruto = porTicker.reduce((a, t) => a + t.resultadoBruto + t.ajustesFuturos, 0);
+  const resultadoBruto = porTicker.reduce(
+    (a, t) => a + t.resultadoBruto + t.ajustesFuturos,
+    0,
+  );
   const resultadoLiquido =
     porTicker.reduce((a, t) => a + t.resultadoLiquido, 0) + aluguel.liquido;
   const wins = closedOps.filter((op) => op.bruto > 0).length;
@@ -444,7 +478,8 @@ export function apurar(notes: NormalizedNote[]): ConsolidatedResult {
       irrf: round2(custosTotais.irrf),
       operacoes: events.length,
       operacoesFechadas: closedOps.length,
-      taxaAcerto: closedOps.length > 0 ? round2((wins / closedOps.length) * 100) : 0,
+      taxaAcerto:
+        closedOps.length > 0 ? round2((wins / closedOps.length) * 100) : 0,
     },
     alertas,
   };

@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { EMPTY_COSTS, type NormalizedNote, type NormalizedTrade } from "@/lib/btg/types";
+import {
+  EMPTY_COSTS,
+  type NormalizedNote,
+  type NormalizedTrade,
+} from "@/lib/btg/types";
 import { apurar } from "./engine";
 
 let noteSeq = 0;
@@ -204,7 +208,9 @@ describe("futuros (bmf)", () => {
     expect(t?.ajustesFuturos).toBe(230);
     expect(t?.resultadoLiquido).toBe(230);
     expect(result.totais.operacoesFechadas).toBe(0); // nada entrou no matching
-    expect(result.serieDiaria.map((d) => d.ajustesFuturos)).toEqual([350, -120]);
+    expect(result.serieDiaria.map((d) => d.ajustesFuturos)).toEqual([
+      350, -120,
+    ]);
   });
 
   it("day trade de futuros entra no matching normal", () => {
@@ -212,8 +218,20 @@ describe("futuros (bmf)", () => {
       makeNote({
         market: "bmf",
         trades: [
-          trade({ ticker: "CCMF25", side: "buy", quantity: 5, price: 62, dayTradeHint: true }),
-          trade({ ticker: "CCMF25", side: "sell", quantity: 5, price: 63, dayTradeHint: true }),
+          trade({
+            ticker: "CCMF25",
+            side: "buy",
+            quantity: 5,
+            price: 62,
+            dayTradeHint: true,
+          }),
+          trade({
+            ticker: "CCMF25",
+            side: "sell",
+            quantity: 5,
+            price: 63,
+            dayTradeHint: true,
+          }),
         ],
       }),
     ]);
@@ -226,7 +244,9 @@ describe("futuros (bmf)", () => {
       makeNote({
         market: "bmf",
         date: "2026-01-05",
-        trades: [trade({ ticker: "CCMF25", side: "buy", quantity: 5, price: 62 })],
+        trades: [
+          trade({ ticker: "CCMF25", side: "buy", quantity: 5, price: 62 }),
+        ],
       }),
       makeNote({
         market: "bmf",
@@ -236,7 +256,9 @@ describe("futuros (bmf)", () => {
       makeNote({
         market: "bmf",
         date: "2026-01-07",
-        trades: [trade({ ticker: "CCMF25", side: "sell", quantity: 5, price: 64 })],
+        trades: [
+          trade({ ticker: "CCMF25", side: "sell", quantity: 5, price: 64 }),
+        ],
       }),
     ]);
     const t = result.porTicker.find((x) => x.ticker === "CCMF25");
@@ -379,9 +401,30 @@ describe("série diária de P/L", () => {
       }),
     ]);
     expect(result.serieDiaria).toEqual([
-      { date: "2026-01-05", resultado: 100, ajustesFuturos: 0, aluguel: 0, total: 100, acumulado: 100 },
-      { date: "2026-01-06", resultado: 0, ajustesFuturos: -50, aluguel: 0, total: -50, acumulado: 50 },
-      { date: "2026-01-07", resultado: 0, ajustesFuturos: 0, aluguel: 10, total: 10, acumulado: 60 },
+      {
+        date: "2026-01-05",
+        resultado: 100,
+        ajustesFuturos: 0,
+        aluguel: 0,
+        total: 100,
+        acumulado: 100,
+      },
+      {
+        date: "2026-01-06",
+        resultado: 0,
+        ajustesFuturos: -50,
+        aluguel: 0,
+        total: -50,
+        acumulado: 50,
+      },
+      {
+        date: "2026-01-07",
+        resultado: 0,
+        ajustesFuturos: 0,
+        aluguel: 10,
+        total: 10,
+        acumulado: 60,
+      },
     ]);
     expect(result.totais.resultadoLiquido).toBe(60);
   });

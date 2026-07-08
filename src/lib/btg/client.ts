@@ -49,20 +49,28 @@ export class BtgClient implements BtgService {
 
   constructor(options: BtgClientOptions = {}) {
     this.baseUrl =
-      options.baseUrl ?? process.env.BTG_API_URL ?? "https://api.btgpactual.com";
+      options.baseUrl ??
+      process.env.BTG_API_URL ??
+      "https://api.btgpactual.com";
     this.clientId = options.clientId ?? process.env.BTG_CLIENT_ID ?? "";
-    this.clientSecret = options.clientSecret ?? process.env.BTG_CLIENT_SECRET ?? "";
+    this.clientSecret =
+      options.clientSecret ?? process.env.BTG_CLIENT_SECRET ?? "";
     this.fetchFn = options.fetchFn ?? fetch;
     // Limite oficial: 60 req/min. Margem de segurança: 50/min.
     this.rateLimiter = options.rateLimiter ?? new RateLimiter(50, 60_000);
     this.sleep =
-      options.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
+      options.sleep ??
+      ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
     this.now = options.now ?? Date.now;
     this.maxRetries = options.maxRetries ?? 4;
   }
 
   async getToken(forceRefresh = false): Promise<BtgToken> {
-    if (!forceRefresh && this.token && this.now() < this.token.expiresAt - 60_000) {
+    if (
+      !forceRefresh &&
+      this.token &&
+      this.now() < this.token.expiresAt - 60_000
+    ) {
       return this.token;
     }
     if (!this.clientId || !this.clientSecret) {
@@ -109,7 +117,10 @@ export class BtgClient implements BtgService {
     return this.token;
   }
 
-  async fetchNotes(accountNumber: string, isoDate: string): Promise<FetchNotesResult> {
+  async fetchNotes(
+    accountNumber: string,
+    isoDate: string,
+  ): Promise<FetchNotesResult> {
     let attempt = 0;
     let renewedOn401 = false;
 
@@ -164,7 +175,10 @@ export class BtgClient implements BtgService {
         continue;
       }
 
-      if ((res.status === 429 || res.status >= 500) && attempt < this.maxRetries) {
+      if (
+        (res.status === 429 || res.status >= 500) &&
+        attempt < this.maxRetries
+      ) {
         await this.sleep(this.backoffMs(attempt));
         attempt += 1;
         continue;

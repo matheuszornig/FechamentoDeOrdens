@@ -11,6 +11,8 @@ let cached: BtgService | null = null;
  */
 export function getBtgService(): BtgService {
   cached ??=
-    process.env.BTG_USE_MOCK === "true" ? new MockBtgService() : new BtgClient();
+    process.env.BTG_USE_MOCK === "true"
+      ? new MockBtgService()
+      : new BtgClient();
   return cached;
 }

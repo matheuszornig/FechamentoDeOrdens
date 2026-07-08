@@ -8,7 +8,12 @@ import { z } from "zod";
  */
 
 /** Aceita number, string numérica ou placeholder "string" (docs do BTG). */
-export const tolerantNumber = z.union([z.number(), z.string(), z.null(), z.undefined()]);
+export const tolerantNumber = z.union([
+  z.number(),
+  z.string(),
+  z.null(),
+  z.undefined(),
+]);
 
 export const bovTradeSchema = z.looseObject({
   cV: z.string().optional(),
@@ -106,7 +111,9 @@ export const loanMovementSchema = z.looseObject({
 
 export const loanNoteSchema = z.looseObject({
   client: z
-    .looseObject({ account_number: z.union([z.string(), z.number()]).optional() })
+    .looseObject({
+      account_number: z.union([z.string(), z.number()]).optional(),
+    })
     .optional(),
   financial_summary: z.looseObject({}).optional(),
   invoice_number: z.union([z.number(), z.string()]).optional(),
@@ -126,4 +133,6 @@ export type BovNote = z.infer<typeof bovNoteSchema>;
 export type BmfTrade = z.infer<typeof bmfTradeSchema>;
 export type BmfNote = z.infer<typeof bmfNoteSchema>;
 export type LoanNote = z.infer<typeof loanNoteSchema>;
-export type BrokerageNotesResponse = z.infer<typeof brokerageNotesResponseSchema>;
+export type BrokerageNotesResponse = z.infer<
+  typeof brokerageNotesResponseSchema
+>;

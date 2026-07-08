@@ -6,7 +6,7 @@ import { type NextRequest, NextResponse } from "next/server";
  * A validação real da sessão acontece no servidor (requireSession) — o cookie
  * aqui é só um filtro otimista, como recomenda a doc do Better Auth.
  */
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const sessionCookie = getSessionCookie(request);
   if (!sessionCookie) {
     return NextResponse.redirect(new URL("/login", request.url));

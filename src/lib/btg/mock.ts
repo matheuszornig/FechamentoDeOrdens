@@ -78,7 +78,8 @@ function buildBovLikeNote(
   const dayIndex = Number(isoDate.slice(8, 10));
 
   // Par de day trade: compra e venda casadas no mesmo pregão.
-  const [dtTicker, dtSpec, dtBase] = tickers[Math.floor(rand() * tickers.length)];
+  const [dtTicker, dtSpec, dtBase] =
+    tickers[Math.floor(rand() * tickers.length)];
   const dtQty = (Math.floor(rand() * 4) + 1) * 100;
   const dtBuy = round2(dtBase * (0.98 + rand() * 0.02));
   const dtSell = round2(dtBuy * (0.995 + rand() * 0.015));
@@ -103,7 +104,8 @@ function buildBovLikeNote(
 
   // Perna de swing: dias pares compram, ímpares vendem — posições abrem e
   // fecham ao longo do período.
-  const [swTicker, swSpec, swBase] = tickers[(dayIndex + tickers.length - 1) % tickers.length];
+  const [swTicker, swSpec, swBase] =
+    tickers[(dayIndex + tickers.length - 1) % tickers.length];
   const swQty = (Math.floor(rand() * 3) + 1) * 100;
   const swPrice = round2(swBase * (0.97 + rand() * 0.06));
   trades.push({
@@ -130,10 +132,16 @@ function buildBovLikeNote(
   }
 
   const volume = trades.reduce((acc, t) => acc + t.valorOperacao, 0);
-  const summarized = new Map<string, { quantidade: number; valorOperacao: number }>();
+  const summarized = new Map<
+    string,
+    { quantidade: number; valorOperacao: number }
+  >();
   for (const t of trades) {
     if (t.specTitulo === "string") continue;
-    const cur = summarized.get(t.specTitulo) ?? { quantidade: 0, valorOperacao: 0 };
+    const cur = summarized.get(t.specTitulo) ?? {
+      quantidade: 0,
+      valorOperacao: 0,
+    };
     cur.quantidade += t.quantidade;
     cur.valorOperacao = round2(cur.valorOperacao + t.valorOperacao);
     summarized.set(t.specTitulo, cur);
@@ -209,7 +217,8 @@ function buildBmfNote(
     },
     // Ajuste diário de posição carregada — fora do matching.
     {
-      mercadoria: FUTURES[(Math.floor(rand() * FUTURES.length) + 1) % FUTURES.length][0],
+      mercadoria:
+        FUTURES[(Math.floor(rand() * FUTURES.length) + 1) % FUTURES.length][0],
       cV: rand() < 0.5 ? "C" : "V",
       dC: "",
       quantidade: 2,
@@ -244,7 +253,12 @@ function buildBmfNote(
   };
 }
 
-function buildLoanNote(rand: () => number, isoDate: string, account: string, noteNumber: number) {
+function buildLoanNote(
+  rand: () => number,
+  isoDate: string,
+  account: string,
+  noteNumber: number,
+) {
   const movements = LOAN_SYMBOLS.filter(() => rand() < 0.6).map((symbol) => {
     const doador = rand() < 0.5;
     const remuneration = round2(rand() * 15);
@@ -268,7 +282,10 @@ function buildLoanNote(rand: () => number, isoDate: string, account: string, not
 }
 
 /** Payload no formato real, ou null para dias "404 — sem notas". */
-export function generateMockPayload(accountNumber: string, isoDate: string): unknown | null {
+export function generateMockPayload(
+  accountNumber: string,
+  isoDate: string,
+): unknown | null {
   const seed = hashString(`${accountNumber}|${isoDate}`);
   const rand = mulberry32(seed);
 
@@ -276,14 +293,33 @@ export function generateMockPayload(accountNumber: string, isoDate: string): unk
   if (rand() < 0.3) return null;
 
   const noteBase = 100_000 + Math.floor(rand() * 900_000);
-  const payload: Record<string, unknown[]> = { loan: [], bmf: [], bov: [], option: [] };
+  const payload: Record<string, unknown[]> = {
+    loan: [],
+    bmf: [],
+    bov: [],
+    option: [],
+  };
 
   payload.bov.push(
-    buildBovLikeNote(rand, BOV_TICKERS, isoDate, accountNumber, "VISTA", noteBase),
+    buildBovLikeNote(
+      rand,
+      BOV_TICKERS,
+      isoDate,
+      accountNumber,
+      "VISTA",
+      noteBase,
+    ),
   );
   if (rand() < 0.3) {
     payload.option.push(
-      buildBovLikeNote(rand, OPTION_TICKERS, isoDate, accountNumber, "OPCAO", noteBase + 1),
+      buildBovLikeNote(
+        rand,
+        OPTION_TICKERS,
+        isoDate,
+        accountNumber,
+        "OPCAO",
+        noteBase + 1,
+      ),
     );
   }
   if (rand() < 0.35) {
@@ -298,7 +334,10 @@ export function generateMockPayload(accountNumber: string, isoDate: string): unk
 }
 
 export class MockBtgService implements BtgService {
-  async fetchNotes(accountNumber: string, isoDate: string): Promise<FetchNotesResult> {
+  async fetchNotes(
+    accountNumber: string,
+    isoDate: string,
+  ): Promise<FetchNotesResult> {
     const payload = generateMockPayload(accountNumber, isoDate);
     if (payload === null) return { kind: "empty" };
     return {

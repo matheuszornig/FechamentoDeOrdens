@@ -2,14 +2,12 @@ import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { getDb, schema } from "@/db";
 
-let cached: ReturnType<typeof betterAuth> | null = null;
-
 /**
  * Instância server-side do Better Auth. Cadastro desabilitado: o único
  * usuário admin é criado pelo seed (scripts/seed-admin.ts / workflow seed.yml).
  */
-export function getAuth() {
-  cached ??= betterAuth({
+function createAuth() {
+  return betterAuth({
     database: drizzleAdapter(getDb(), { provider: "pg", schema }),
     emailAndPassword: {
       enabled: true,
@@ -18,6 +16,12 @@ export function getAuth() {
     secret: process.env.BETTER_AUTH_SECRET,
     baseURL: process.env.BETTER_AUTH_URL,
   });
+}
+
+let cached: ReturnType<typeof createAuth> | null = null;
+
+export function getAuth(): ReturnType<typeof createAuth> {
+  cached ??= createAuth();
   return cached;
 }
 

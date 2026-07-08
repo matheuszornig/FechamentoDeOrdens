@@ -14,7 +14,9 @@ describe("listBusinessDays", () => {
   });
 
   it("intervalo de um único dia útil", () => {
-    expect(listBusinessDays("2026-01-05", "2026-01-05")).toEqual(["2026-01-05"]);
+    expect(listBusinessDays("2026-01-05", "2026-01-05")).toEqual([
+      "2026-01-05",
+    ]);
   });
 
   it("intervalo só com fim de semana é vazio", () => {

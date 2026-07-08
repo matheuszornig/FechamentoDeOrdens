@@ -4,20 +4,27 @@ import { RateLimiter } from "./rate-limiter";
 
 const TOKEN_URL =
   "https://api.btgpactual.com/iaas-auth/api/v1/authorization/oauth2/accesstoken";
-const NOTES_URL =
-  "https://api.btgpactual.com/iaas-brokerage-notes/api/v1/brokerage-notes/account";
 
 function tokenResponse(token = "tok-1") {
   return new Response("", {
     status: 200,
-    headers: { access_token: token, "x-id-pactual": "pactual-1", Expires: "900" },
+    headers: {
+      access_token: token,
+      "x-id-pactual": "pactual-1",
+      Expires: "900",
+    },
   });
 }
 
-function notesResponse(payload: unknown = { bov: [], option: [], bmf: [], loan: [] }) {
+function notesResponse(
+  payload: unknown = { bov: [], option: [], bmf: [], loan: [] },
+) {
   return new Response(JSON.stringify(payload), {
     status: 200,
-    headers: { "Content-Type": "application/json", "x-id-pactual": "pactual-2" },
+    headers: {
+      "Content-Type": "application/json",
+      "x-id-pactual": "pactual-2",
+    },
   });
 }
 
@@ -43,7 +50,10 @@ describe("BtgClient.getToken", () => {
 
     expect(token.accessToken).toBe("tok-1");
     expect(token.xIdPactual).toBe("pactual-1");
-    const [url, init] = fetchFn.mock.calls[0] as unknown as [string, RequestInit];
+    const [url, init] = fetchFn.mock.calls[0] as unknown as [
+      string,
+      RequestInit,
+    ];
     expect(url).toBe(TOKEN_URL);
     const headers = init.headers as Record<string, string>;
     expect(headers.Authorization).toBe(
@@ -56,7 +66,9 @@ describe("BtgClient.getToken", () => {
 
   it("cacheia o token e renova ~60s antes de expirar", async () => {
     let now = 0;
-    const fetchFn = vi.fn(async () => tokenResponse(`tok-${fetchFn.mock.calls.length}`));
+    const fetchFn = vi.fn(async () =>
+      tokenResponse(`tok-${fetchFn.mock.calls.length}`),
+    );
     const client = makeClient(fetchFn as unknown as typeof fetch, () => now);
 
     await client.getToken();
@@ -109,7 +121,9 @@ describe("BtgClient.fetchNotes", () => {
     const fetchFn = vi.fn(async (url: string) => {
       if (url === TOKEN_URL) return tokenResponse();
       notesCalls += 1;
-      return new Response("Não há valores publicados para esta data", { status: 404 });
+      return new Response("Não há valores publicados para esta data", {
+        status: 404,
+      });
     });
     const client = makeClient(fetchFn as unknown as typeof fetch);
 
@@ -181,6 +195,8 @@ describe("BtgClient.fetchNotes", () => {
       sleep: async () => {},
       maxRetries: 2,
     });
-    await expect(client.fetchNotes("12345", "2026-01-05")).rejects.toThrow(/500/);
+    await expect(client.fetchNotes("12345", "2026-01-05")).rejects.toThrow(
+      /500/,
+    );
   });
 });

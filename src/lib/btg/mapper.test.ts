@@ -140,12 +140,16 @@ describe("mapNotesPayload — bov/option", () => {
       outros: 0.1,
     });
     expect(note.irrf).toBe(0.11);
-    expect(note.summary).toEqual([{ ticker: "AMER3", quantity: 200, value: 2100 }]);
+    expect(note.summary).toEqual([
+      { ticker: "AMER3", quantity: 200, value: 2100 },
+    ]);
   });
 
   it("aceita campos extras sem falhar (schema tolerante)", () => {
     const extra = structuredClone(payload) as Record<string, unknown>;
-    (extra.bov as Record<string, unknown>[])[0].campoNovoDoBtg = { qualquer: 1 };
+    (extra.bov as Record<string, unknown>[])[0].campoNovoDoBtg = {
+      qualquer: 1,
+    };
     expect(() => mapNotesPayload(extra, "12345", "2026-01-05")).not.toThrow();
   });
 });

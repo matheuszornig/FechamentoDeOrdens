@@ -74,13 +74,17 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
 // bov / option (mesma estrutura)
 // ---------------------------------------------------------------------------
 
+type BovTicketInfo = NonNullable<BovNote["ticketInfo"]>;
+type BmfTicketInfo = NonNullable<BmfNote["ticketInfo"]>;
+type BmfFinancialSummary = NonNullable<BmfNote["financialSummary"]>;
+
 function mapBovNote(
   note: BovNote,
   market: Market,
   accountNumber: string,
   fallbackDate: string,
 ): NormalizedNote | null {
-  const info = note.ticketInfo ?? {};
+  const info: BovTicketInfo = note.ticketInfo ?? ({} as BovTicketInfo);
   const date = parseBrDate(info.dataPregao) ?? fallbackDate;
   const noteNumber = String(info.numeroNota ?? "").trim();
 
@@ -97,7 +101,10 @@ function mapBovNote(
       quantity,
       price,
       grossValue,
-      dayTradeHint: String(t.obs ?? "").trim().toUpperCase() === "D",
+      dayTradeHint:
+        String(t.obs ?? "")
+          .trim()
+          .toUpperCase() === "D",
     });
   }
 
@@ -125,7 +132,10 @@ function mapBovNote(
     costs: {
       corretagem: normalizeCost(info.correDataTotal, info.correDataTotalText),
       emolumentos: normalizeCost(info.bolsaDataEmol, info.bolsaDataEmolText),
-      liquidacao: normalizeCost(info.clearDataTaxaLiq, info.clearDataTaxaLiqText),
+      liquidacao: normalizeCost(
+        info.clearDataTaxaLiq,
+        info.clearDataTaxaLiqText,
+      ),
       registro: normalizeCost(info.clearDataTaxaReg, info.clearDataTaxaRegText),
       iss: normalizeCost(info.correDataIss, info.correDataIssText),
       pis: normalizeCost(info.pis),
@@ -146,8 +156,9 @@ function mapBmfNote(
   accountNumber: string,
   fallbackDate: string,
 ): NormalizedNote | null {
-  const info = note.ticketInfo ?? {};
-  const fin = note.financialSummary ?? {};
+  const info: BmfTicketInfo = note.ticketInfo ?? ({} as BmfTicketInfo);
+  const fin: BmfFinancialSummary =
+    note.financialSummary ?? ({} as BmfFinancialSummary);
   const date = parseBrDate(info.dataPregao) ?? fallbackDate;
   const noteNumber = String(info.numeroNota ?? "").trim();
 
@@ -162,7 +173,11 @@ function mapBmfNote(
     if (!ticker) continue;
     const rawValue = toNumber(t.valorOperacao);
 
-    if (String(t.tipoNegocio ?? "").trim().toUpperCase() === "AJUPOS") {
+    if (
+      String(t.tipoNegocio ?? "")
+        .trim()
+        .toUpperCase() === "AJUPOS"
+    ) {
       // Ajuste diário de posição: não é abertura/fechamento. Valor já vem
       // assinado; se vier absoluto, o lado "V" indica débito ao cliente.
       const value =
@@ -184,12 +199,16 @@ function mapBmfNote(
       quantity,
       price,
       grossValue: Math.abs(rawValue) || quantity * price,
-      dayTradeHint: String(t.dC ?? "").trim().toUpperCase() === "D",
+      dayTradeHint:
+        String(t.dC ?? "")
+          .trim()
+          .toUpperCase() === "D",
       maturity: parseBrDate(t.vencimento) ?? undefined,
     });
   }
 
-  if (trades.length === 0 && adjustments.length === 0 && !noteNumber) return null;
+  if (trades.length === 0 && adjustments.length === 0 && !noteNumber)
+    return null;
 
   // financialSummary do bmf traz custos com sinal negativo → abs.
   return {
@@ -231,7 +250,9 @@ function mapLoanNote(
   const loanLines: LoanLine[] = [];
   for (const m of note.movements ?? []) {
     const symbol =
-      typeof m.symbol === "string" && m.symbol !== "string" ? m.symbol.trim() : null;
+      typeof m.symbol === "string" && m.symbol !== "string"
+        ? m.symbol.trim()
+        : null;
     if (!symbol) continue;
     loanLines.push({
       symbol,

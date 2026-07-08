@@ -80,7 +80,9 @@ export const brokerageNote = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
     accountNumber: text("account_number").notNull(),
     tradeDate: date("trade_date", { mode: "string" }).notNull(),
-    market: text("market", { enum: ["bov", "option", "bmf", "loan"] }).notNull(),
+    market: text("market", {
+      enum: ["bov", "option", "bmf", "loan"],
+    }).notNull(),
     noteNumber: text("note_number").notNull(),
     normalized: jsonb("normalized").notNull(),
     rawPayload: jsonb("raw_payload").notNull(),
@@ -122,7 +124,14 @@ export const apuracaoJob = pgTable("apuracao_job", {
   startDate: date("start_date", { mode: "string" }).notNull(),
   endDate: date("end_date", { mode: "string" }).notNull(),
   status: text("status", {
-    enum: ["pendente", "buscando", "calculando", "concluido", "erro", "cancelado"],
+    enum: [
+      "pendente",
+      "buscando",
+      "calculando",
+      "concluido",
+      "erro",
+      "cancelado",
+    ],
   })
     .notNull()
     .default("pendente"),
