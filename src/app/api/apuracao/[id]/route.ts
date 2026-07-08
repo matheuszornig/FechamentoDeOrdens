@@ -52,6 +52,8 @@ export async function GET(request: Request, { params }: Params) {
     result: job.result,
     alerts: job.alerts,
     updatedAt: job.updatedAt,
+    // Torna visível na UI quando o ambiente está servindo dados simulados.
+    mock: process.env.BTG_USE_MOCK === "true",
   });
 }
 

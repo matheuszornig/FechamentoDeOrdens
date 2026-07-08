@@ -20,6 +20,8 @@ export interface JobResponse {
   result: ConsolidatedResult | null;
   alerts: string[] | null;
   updatedAt: string;
+  /** true quando o servidor está com BTG_USE_MOCK=true (dados simulados). */
+  mock: boolean;
 }
 
 export function isActiveStatus(status: JobStatus): boolean {

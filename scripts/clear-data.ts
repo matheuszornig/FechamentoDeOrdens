@@ -19,7 +19,8 @@ async function main() {
     (select count(*)::int from brokerage_note) as notas,
     (select count(*)::int from fetched_date) as datas,
     (select count(*)::int from apuracao_job) as jobs`;
-  const contas = await sql`select distinct account_number from fetched_date order by 1`;
+  const contas =
+    await sql`select distinct account_number from fetched_date order by 1`;
   console.log("[clear-data] contagens:", counts);
   console.log(
     "[clear-data] contas com cache:",

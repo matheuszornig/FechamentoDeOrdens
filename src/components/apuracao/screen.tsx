@@ -167,6 +167,13 @@ export function ApuracaoScreen({ userEmail }: { userEmail: string }) {
 
       {job?.status === "concluido" && job.result && (
         <>
+          {job.mock && (
+            <div className="rounded-md border border-amber-500/50 bg-amber-500/10 px-4 py-3 text-sm text-amber-800 dark:text-amber-400">
+              <strong>Dados simulados:</strong> o servidor está com{" "}
+              <code>BTG_USE_MOCK=true</code> — estas notas são fictícias e
+              determinísticas, não vieram da API do BTG.
+            </div>
+          )}
           <SummaryCards result={job.result} />
           <PlChart data={job.result.serieDiaria} />
           <ResultTable result={job.result} />
