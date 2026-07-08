@@ -125,6 +125,7 @@ describe("buildAuditWorkbook", () => {
     const rows = sheetRows(wb, "Resultado por Ticker");
     expect(rows?.[0]).toMatchObject({
       Ticker: "PETR4",
+      "Quantidade Fechada": 100, // day trade casado: 100 compradas × 100 vendidas
       "PM Compra": 10,
       "PM Venda": 11,
       "Resultado Líquido": 95, // 100 × (11-10) − 5 de corretagem

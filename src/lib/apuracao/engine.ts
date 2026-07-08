@@ -520,6 +520,10 @@ export function apurar(
       modalidade,
       operacoes: acc.operacoes,
       quantidade: acc.quantidade,
+      // dayTradeQty soma as duas pontas do casamento (compra+venda), por
+      // isso divide por 2; swingClosedQty já é de uma ponta só (inclui
+      // fechamentos de swing, exercício e vencimento — regra 10/11).
+      quantidadeFechada: round2(acc.dayTradeQty / 2 + acc.swingClosedQty),
       precoMedioCompra:
         acc.buyQty > 0 ? round2(acc.buyValue / acc.buyQty) : null,
       precoMedioVenda:

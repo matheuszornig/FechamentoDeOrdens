@@ -449,6 +449,66 @@ describe("preço médio de compra e venda", () => {
   });
 });
 
+describe("quantidade fechada", () => {
+  it("1000 compradas e 500 vendidas em dias distintos fecham 500 (swing)", () => {
+    const result = apurar([
+      makeNote({
+        date: "2026-01-05",
+        trades: [trade({ side: "buy", quantity: 1000, price: 10 })],
+      }),
+      makeNote({
+        date: "2026-01-06",
+        trades: [trade({ side: "sell", quantity: 500, price: 11 })],
+      }),
+    ]);
+    const t = result.porTicker[0];
+    expect(t.quantidade).toBe(1500); // total negociado (1000 + 500)
+    expect(t.quantidadeFechada).toBe(500); // só o que foi de fato encerrado
+  });
+
+  it("day trade casado no mesmo pregão conta a quantidade fechada de um lado só", () => {
+    const result = apurar([
+      makeNote({
+        trades: [
+          trade({ side: "buy", quantity: 200, price: 10 }),
+          trade({ side: "sell", quantity: 200, price: 11 }),
+        ],
+      }),
+    ]);
+    // dayTradeQty acumula as duas pontas (400); fechada reporta uma ponta (200).
+    expect(result.porTicker[0].quantidadeFechada).toBe(200);
+  });
+
+  it("posição só aberta (sem contraparte) não fecha nada", () => {
+    const result = apurar([
+      makeNote({ trades: [trade({ side: "buy", quantity: 300, price: 10 })] }),
+    ]);
+    expect(result.porTicker[0].quantidadeFechada).toBe(0);
+  });
+
+  it("vencimento de opção conta como quantidade fechada", () => {
+    const result = apurar(
+      [
+        makeNote({
+          market: "option",
+          date: "2026-07-07",
+          trades: [
+            trade({
+              ticker: "VALES795",
+              side: "sell",
+              quantity: 300,
+              price: 1.26,
+              maturity: "2026-07-17",
+            }),
+          ],
+        }),
+      ],
+      { endDate: "2026-07-31" },
+    );
+    expect(result.porTicker[0].quantidadeFechada).toBe(300);
+  });
+});
+
 describe("aluguel (loan)", () => {
   it("entra como linha separada, fora do matching", () => {
     const result = apurar([

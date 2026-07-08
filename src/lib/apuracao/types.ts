@@ -10,6 +10,12 @@ export interface TickerResult {
   operacoes: number;
   /** Quantidade total negociada. */
   quantidade: number;
+  /**
+   * Quantidade efetivamente fechada no período (day trade + fechamentos de
+   * swing/exercício/vencimento) — ex.: 1000 compradas e 500 vendidas geram
+   * 500 de quantidade fechada.
+   */
+  quantidadeFechada: number;
   /** Preço médio das compras do período (null sem compras). */
   precoMedioCompra: number | null;
   /** Preço médio das vendas do período (null sem vendas). */

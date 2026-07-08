@@ -121,6 +121,7 @@ export function buildAuditWorkbook(
     Mercado: MERCADO_LABEL[t.mercado] ?? t.mercado,
     Operações: t.operacoes,
     Quantidade: t.quantidade,
+    "Quantidade Fechada": t.quantidadeFechada,
     "PM Compra": t.precoMedioCompra,
     "PM Venda": t.precoMedioVenda,
     "Resultado Bruto": t.resultadoBruto,

@@ -90,13 +90,13 @@ export function ResultTable({ result }: { result: ConsolidatedResult }) {
         ),
       },
       {
-        accessorKey: "operacoes",
+        accessorKey: "quantidadeFechada",
         header: ({ column }) => (
-          <SortableHeader label="Operações" column={column} />
+          <SortableHeader label="Quantidade Fechada" column={column} />
         ),
         cell: ({ row }) => (
           <span className="tabular-nums">
-            {formatInt(row.original.operacoes)}
+            {formatInt(row.original.quantidadeFechada)}
           </span>
         ),
       },
