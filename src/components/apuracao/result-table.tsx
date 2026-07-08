@@ -64,9 +64,29 @@ export function ResultTable({ result }: { result: ConsolidatedResult }) {
     { id: "resultadoLiquido", desc: true },
   ]);
 
-  const totalLiquido = useMemo(
-    () => result.porTicker.reduce((acc, t) => acc + t.resultadoLiquido, 0),
+  // Só operações com algo de fato fechado no período — posições apenas
+  // abertas (nada casado/exercido/vencido) não entram nesta tabela. Futuros
+  // só com ajuste diário (sem negócio no período) ficam de fora do filtro:
+  // o ajuste já é resultado realizado em caixa, mesmo sem quantidade fechada.
+  const rows = useMemo(
+    () =>
+      result.porTicker.filter(
+        (t) => t.quantidadeFechada !== 0 || t.ajustesFuturos !== 0,
+      ),
     [result.porTicker],
+  );
+
+  const totais = useMemo(
+    () =>
+      rows.reduce(
+        (acc, t) => ({
+          bruto: acc.bruto + t.resultadoBruto + t.ajustesFuturos,
+          custos: acc.custos + t.custos,
+          liquido: acc.liquido + t.resultadoLiquido,
+        }),
+        { bruto: 0, custos: 0, liquido: 0 },
+      ),
+    [rows],
   );
 
   const columns = useMemo<ColumnDef<TickerResult>[]>(
@@ -185,7 +205,7 @@ export function ResultTable({ result }: { result: ConsolidatedResult }) {
   );
 
   const table = useReactTable({
-    data: result.porTicker,
+    data: rows,
     columns,
     state: { sorting },
     onSortingChange: setSorting,
@@ -203,9 +223,9 @@ export function ResultTable({ result }: { result: ConsolidatedResult }) {
         </CardDescription>
       </CardHeader>
       <CardContent>
-        {result.porTicker.length === 0 ? (
+        {rows.length === 0 ? (
           <p className="py-8 text-center text-sm text-muted-foreground">
-            Nenhuma operação encontrada no período.
+            Nenhuma operação fechada no período.
           </p>
         ) : (
           <div className="overflow-x-auto">
@@ -242,27 +262,24 @@ export function ResultTable({ result }: { result: ConsolidatedResult }) {
                 <TableRow>
                   <TableCell colSpan={5}>Total</TableCell>
                   <TableCell
-                    className={cn(
-                      "tabular-nums",
-                      plClass(result.totais.resultadoBruto),
-                    )}
+                    className={cn("tabular-nums", plClass(totais.bruto))}
                   >
-                    {formatBRLSigned(result.totais.resultadoBruto)}
+                    {formatBRLSigned(totais.bruto)}
                   </TableCell>
                   <TableCell className="tabular-nums">
-                    {formatBRL(result.totais.custos)}
+                    {formatBRL(totais.custos)}
                   </TableCell>
                   <TableCell
                     className={cn(
                       "font-medium tabular-nums",
-                      plClass(totalLiquido),
+                      plClass(totais.liquido),
                     )}
                   >
-                    {formatBRLSigned(totalLiquido)}
+                    {formatBRLSigned(totais.liquido)}
                   </TableCell>
                   <TableCell className="tabular-nums">
-                    {result.totais.resultadoBruto !== 0
-                      ? `${((result.totais.custos / Math.abs(result.totais.resultadoBruto)) * 100).toFixed(1)}%`
+                    {totais.bruto !== 0
+                      ? `${((totais.custos / Math.abs(totais.bruto)) * 100).toFixed(1)}%`
                       : "—"}
                   </TableCell>
                 </TableRow>
