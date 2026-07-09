@@ -28,7 +28,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { isFechado } from "@/lib/apuracao/closed-totals";
+import { computeClosedTotals, isFechado } from "@/lib/apuracao/closed-totals";
 import type { ConsolidatedResult, TickerResult } from "@/lib/apuracao/types";
 import { formatBRL, formatBRLSigned, formatInt, plClass } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -73,20 +73,9 @@ export function ResultTable({ result }: { result: ConsolidatedResult }) {
     [result.porTicker],
   );
 
-  // Rodapé soma só as linhas exibidas — o card "Resultado líquido do período"
-  // (computeClosedTotals) equivale a este rodapé + o da tabela de futuros.
-  const totais = useMemo(
-    () =>
-      rows.reduce(
-        (acc, t) => ({
-          bruto: acc.bruto + t.resultadoBruto + t.ajustesFuturos,
-          custos: acc.custos + t.custos,
-          liquido: acc.liquido + t.resultadoLiquido,
-        }),
-        { bruto: 0, custos: 0, liquido: 0 },
-      ),
-    [rows],
-  );
+  // Mesma base dos cards de resumo e do gráfico (computeClosedTotals, que já
+  // exclui futuros) — o rodapé desta tabela e os cards do topo sempre batem.
+  const totais = useMemo(() => computeClosedTotals(result), [result]);
 
   const columns = useMemo<ColumnDef<TickerResult>[]>(
     () => [

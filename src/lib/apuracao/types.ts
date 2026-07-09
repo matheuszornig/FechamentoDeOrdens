@@ -51,7 +51,11 @@ export interface TickerCosts extends CostBreakdown {
 export interface DailyPoint {
   /** Data do pregão (ISO). */
   date: string;
-  /** Resultado realizado do dia (day trade + swing), líquido de custos. */
+  /**
+   * Resultado realizado do dia (day trade + swing), líquido de custos —
+   * exclui futuros por completo (financeiro e custos ficam em
+   * `ajustesFuturos` e no custo por ticker da mercadoria).
+   */
   resultado: number;
   ajustesFuturos: number;
   aluguel: number;

@@ -74,7 +74,7 @@ describe("isFechado / computeClosedTotals", () => {
     });
   });
 
-  it("inclui ticker de futuros só com ajuste diário (sem negócio no período)", () => {
+  it("futuros ficam fora dos totais fechados (têm tabela própria), mas contam como fechados", () => {
     const result = apurar([
       makeNote({
         market: "bmf",
@@ -85,7 +85,7 @@ describe("isFechado / computeClosedTotals", () => {
     expect(t.quantidadeFechada).toBe(0);
     expect(t.ajustesFuturos).toBe(350);
     expect(isFechado(t)).toBe(true); // ajuste já é resultado realizado
-    expect(computeClosedTotals(result).liquido).toBe(350);
+    expect(computeClosedTotals(result).liquido).toBe(0); // bmf excluído dos cards
   });
 
   it("soma só os tickers fechados, ignorando os só-abertos", () => {

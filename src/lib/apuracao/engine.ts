@@ -329,8 +329,12 @@ export function apurar(
     }
     acc.costs.irrf += ev.irrf;
     // Custos do dia entram na série diária no dia em que ocorrem (IRRF fica
-    // fora do líquido, registrado à parte — regra 5).
-    addDaily(ev.date, -Object.values(ev.costs).reduce((a, b) => a + b, 0));
+    // fora do líquido, registrado à parte — regra 5). Futuros ficam fora da
+    // série realizada por completo (custos inclusive): seu financeiro vive
+    // no canal de ajustes e é exibido/somado à parte.
+    if (ev.market !== "bmf") {
+      addDaily(ev.date, -Object.values(ev.costs).reduce((a, b) => a + b, 0));
+    }
   }
 
   const sortedDates = [...byDate.keys()].sort();
