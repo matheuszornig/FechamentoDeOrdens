@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   deriveUnderlying,
   mapNotesPayload,
+  mapNotesPayloadWithRaw,
   normalizeCost,
   normalizeDoc,
   parseBrDate,
@@ -591,5 +592,87 @@ describe("mapNotesPayload — loan", () => {
       },
     ]);
     expect(note.irrf).toBe(1.86);
+  });
+});
+
+describe("mapNotesPayloadWithRaw — rawPayload por nota (não por dia)", () => {
+  const payload = {
+    bov: [
+      {
+        ticketInfo: { numeroNota: "1", dataPregao: "05/01/2026" },
+        tradeList: [
+          {
+            cV: "C",
+            specTitulo: "PETR4\tPN",
+            quantidade: 100,
+            precoAjuste: 10,
+            valorOperacao: 1000,
+            tipoMercado: "VISTA",
+          },
+        ],
+      },
+      {
+        ticketInfo: { numeroNota: "2", dataPregao: "05/01/2026" },
+        tradeList: [
+          {
+            cV: "V",
+            specTitulo: "VALE3\tON",
+            quantidade: 50,
+            precoAjuste: 60,
+            valorOperacao: 3000,
+            tipoMercado: "VISTA",
+          },
+        ],
+      },
+    ],
+    loan: [
+      {
+        invoice_number: 999,
+        movement_date: "2026-01-05",
+        movements: [
+          {
+            symbol: "PETR4",
+            contract_side: "Doador",
+            quantity: 100,
+            fee: 0,
+            remuneration: 5,
+            irrf: 0.75,
+          },
+        ],
+      },
+    ],
+  };
+
+  it("cada nota carrega só o próprio fragmento, não a resposta do dia inteiro", () => {
+    const mapped = mapNotesPayloadWithRaw(payload, "12345", "2026-01-05");
+    expect(mapped).toHaveLength(3);
+
+    const petr4 = mapped.find((m) => m.note.noteNumber === "1");
+    expect(petr4?.raw).toEqual({ bov: [payload.bov[0]] });
+    // Não deve conter a nota "2" nem a de loan.
+    expect(JSON.stringify(petr4?.raw)).not.toContain("VALE3");
+    expect(JSON.stringify(petr4?.raw)).not.toContain("999");
+
+    const vale3 = mapped.find((m) => m.note.noteNumber === "2");
+    expect(vale3?.raw).toEqual({ bov: [payload.bov[1]] });
+
+    const loan = mapped.find((m) => m.note.market === "loan");
+    expect(loan?.raw).toEqual({ loan: [payload.loan[0]] });
+  });
+
+  it("o fragmento de cada nota, remapeado sozinho, reproduz a mesma nota (round-trip)", () => {
+    const mapped = mapNotesPayloadWithRaw(payload, "12345", "2026-01-05");
+    for (const { note, raw } of mapped) {
+      const [remapped] = mapNotesPayload(raw, "12345", "2026-01-05");
+      expect(remapped).toEqual(note);
+    }
+  });
+
+  it("mapNotesPayload (sem raw) continua retornando as mesmas notas", () => {
+    const withRaw = mapNotesPayloadWithRaw(payload, "12345", "2026-01-05").map(
+      (m) => m.note,
+    );
+    const plain = mapNotesPayload(payload, "12345", "2026-01-05");
+    expect(plain).toEqual(withRaw);
   });
 });

@@ -420,6 +420,44 @@ function mapLoanNote(
 // Entrada única
 // ---------------------------------------------------------------------------
 
+/** Uma nota mapeada junto com o fragmento bruto que a gerou (só essa nota). */
+export interface MappedNote {
+  note: NormalizedNote;
+  /** Só a entrada desta nota, no mesmo formato da resposta da API (uma seção,
+   * um elemento) — NÃO a resposta do dia inteiro. Ver mapNotesPayloadWithRaw. */
+  raw: BrokerageNotesResponse;
+}
+
+function mapPayload(
+  payload: unknown,
+  accountNumber: string,
+  fallbackDate: string,
+): MappedNote[] {
+  const parsed: BrokerageNotesResponse = brokerageNotesResponseSchema.parse(
+    payload ?? {},
+  );
+  const mapped: MappedNote[] = [];
+
+  for (const n of parsed.bov ?? []) {
+    const note = mapBovNote(n, "bov", accountNumber, fallbackDate);
+    if (note) mapped.push({ note, raw: { bov: [n] } });
+  }
+  for (const n of parsed.option ?? []) {
+    const note = mapBovNote(n, "option", accountNumber, fallbackDate);
+    if (note) mapped.push({ note, raw: { option: [n] } });
+  }
+  for (const n of parsed.bmf ?? []) {
+    const note = mapBmfNote(n, accountNumber, fallbackDate);
+    if (note) mapped.push({ note, raw: { bmf: [n] } });
+  }
+  for (const n of parsed.loan ?? []) {
+    const note = mapLoanNote(n, accountNumber, fallbackDate);
+    if (note) mapped.push({ note, raw: { loan: [n] } });
+  }
+
+  return mapped;
+}
+
 /**
  * Converte o payload bruto (resposta 200 da API) em NormalizedNote[].
  * `fallbackDate` (ISO) é a data consultada — usada quando a nota não traz
@@ -430,27 +468,22 @@ export function mapNotesPayload(
   accountNumber: string,
   fallbackDate: string,
 ): NormalizedNote[] {
-  const parsed: BrokerageNotesResponse = brokerageNotesResponseSchema.parse(
-    payload ?? {},
-  );
-  const notes: NormalizedNote[] = [];
+  return mapPayload(payload, accountNumber, fallbackDate).map((m) => m.note);
+}
 
-  for (const n of parsed.bov ?? []) {
-    const mapped = mapBovNote(n, "bov", accountNumber, fallbackDate);
-    if (mapped) notes.push(mapped);
-  }
-  for (const n of parsed.option ?? []) {
-    const mapped = mapBovNote(n, "option", accountNumber, fallbackDate);
-    if (mapped) notes.push(mapped);
-  }
-  for (const n of parsed.bmf ?? []) {
-    const mapped = mapBmfNote(n, accountNumber, fallbackDate);
-    if (mapped) notes.push(mapped);
-  }
-  for (const n of parsed.loan ?? []) {
-    const mapped = mapLoanNote(n, accountNumber, fallbackDate);
-    if (mapped) notes.push(mapped);
-  }
-
-  return notes;
+/**
+ * Como mapNotesPayload, mas retorna também o fragmento bruto de cada nota —
+ * só a entrada daquela nota (uma seção, um elemento), não a resposta do dia
+ * inteiro. Usado ao persistir: sem isso, `rawPayload` replicaria a resposta
+ * completa do dia em toda linha extraída daquele dia, inflando o
+ * armazenamento proporcionalmente ao nº de notas por dia (uma nota com
+ * muitos negócios pode gerar payloads de dezenas de MB, estourando o limite
+ * de resposta do driver HTTP do Neon ao reconsultar por conta+período).
+ */
+export function mapNotesPayloadWithRaw(
+  payload: unknown,
+  accountNumber: string,
+  fallbackDate: string,
+): MappedNote[] {
+  return mapPayload(payload, accountNumber, fallbackDate);
 }

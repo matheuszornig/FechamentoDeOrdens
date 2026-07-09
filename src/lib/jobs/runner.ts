@@ -2,7 +2,7 @@ import { and, eq, gte, inArray, isNull, lt, lte, or } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { listBusinessDays } from "@/lib/apuracao/business-days";
 import { apurar } from "@/lib/apuracao/engine";
-import { mapNotesPayload } from "@/lib/btg/mapper";
+import { mapNotesPayload, mapNotesPayloadWithRaw } from "@/lib/btg/mapper";
 import { getBtgService } from "@/lib/btg/service";
 
 const ACTIVE_STATUSES = ["pendente", "buscando", "calculando"] as const;
@@ -99,12 +99,24 @@ export async function processJobSlice(jobId: string): Promise<void> {
       .update(schema.apuracaoJob)
       .set({
         status: "erro",
-        errorMessage: err instanceof Error ? err.message : String(err),
+        errorMessage: formatError(err),
         lockedAt: null,
         updatedAt: new Date(),
       })
       .where(eq(schema.apuracaoJob.id, job.id));
   }
+}
+
+/**
+ * Drizzle envolve o erro real do driver em `.cause` (ex.: "Failed query: ..."
+ * na mensagem, com o erro do Postgres/Neon só disponível em `.cause`) — sem
+ * isso, o motivo de fato (ex.: "response is too large") fica invisível no
+ * errorMessage persistido no job.
+ */
+function formatError(err: unknown): string {
+  if (!(err instanceof Error)) return String(err);
+  const cause = err.cause instanceof Error ? err.cause.message : undefined;
+  return cause ? `${err.message} — causa: ${cause}` : err.message;
 }
 
 async function runSlice(job: ApuracaoJobRow): Promise<void> {
@@ -166,7 +178,14 @@ async function runSlice(job: ApuracaoJobRow): Promise<void> {
       try {
         const result = await service.fetchNotes(job.accountNumber, day);
         if (result.kind === "notes") {
-          for (const note of result.notes) {
+          // rawPayload guarda só o fragmento desta nota (não a resposta do
+          // dia inteiro) — uma nota com muitos negócios não deve inflar o
+          // armazenamento de todas as outras notas extraídas do mesmo dia.
+          for (const { note, raw } of mapNotesPayloadWithRaw(
+            result.raw,
+            job.accountNumber,
+            day,
+          )) {
             await db
               .insert(schema.brokerageNote)
               .values({
@@ -175,7 +194,7 @@ async function runSlice(job: ApuracaoJobRow): Promise<void> {
                 market: note.market,
                 noteNumber: note.noteNumber,
                 normalized: note,
-                rawPayload: result.raw as object,
+                rawPayload: raw as object,
               })
               .onConflictDoNothing();
           }
@@ -199,7 +218,7 @@ async function runSlice(job: ApuracaoJobRow): Promise<void> {
             },
           });
       } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
+        const message = formatError(err);
         await db
           .insert(schema.fetchedDate)
           .values({
