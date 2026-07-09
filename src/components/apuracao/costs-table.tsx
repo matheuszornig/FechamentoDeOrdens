@@ -20,7 +20,6 @@ import {
   Table,
   TableBody,
   TableCell,
-  TableFooter,
   TableHead,
   TableHeader,
   TableRow,
@@ -127,16 +126,6 @@ export function CostsTable({ result }: { result: ConsolidatedResult }) {
                   </TableRow>
                 ))}
               </TableBody>
-              <TableFooter>
-                <TableRow>
-                  <TableCell>Total</TableCell>
-                  {COST_COLUMNS.map(({ key }) => (
-                    <TableCell key={key} className="tabular-nums">
-                      {formatBRL(result.custosTotais[key])}
-                    </TableCell>
-                  ))}
-                </TableRow>
-              </TableFooter>
             </Table>
           </div>
         )}
