@@ -1,10 +1,10 @@
 "use client";
 
-import { Activity, Receipt, TrendingUp } from "lucide-react";
+import { Percent, Receipt, TrendingUp } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { computeClosedTotals } from "@/lib/apuracao/closed-totals";
 import type { ConsolidatedResult } from "@/lib/apuracao/types";
-import { formatBRL, formatBRLSigned, formatInt, plClass } from "@/lib/format";
+import { formatBRL, formatBRLSigned, plClass } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 function StatTile({
@@ -39,12 +39,15 @@ function StatTile({
 }
 
 export function SummaryCards({ result }: { result: ConsolidatedResult }) {
-  const { totais } = result;
   // Mesma base da tabela "Resultado fechado por ticker" (só o que fechou no
-  // período) — este card bate com o rodapé dessa tabela. Difere de
-  // `totais.resultadoLiquido`, que soma o período inteiro (posições ainda
-  // abertas + aluguel).
+  // período) — estes cards batem com o rodapé dessa tabela. Difere de
+  // `result.totais`, que soma o período inteiro (posições ainda abertas +
+  // aluguel).
   const fechados = computeClosedTotals(result);
+  const custoLucro =
+    fechados.bruto !== 0
+      ? (fechados.custos / Math.abs(fechados.bruto)) * 100
+      : null;
   return (
     <div className="grid gap-4 sm:grid-cols-3">
       <StatTile
@@ -61,10 +64,10 @@ export function SummaryCards({ result }: { result: ConsolidatedResult }) {
         hint={`IRRF retido: ${formatBRL(fechados.irrf)}`}
       />
       <StatTile
-        icon={Activity}
-        label="Operações"
-        value={formatInt(totais.operacoes)}
-        hint={`${formatInt(totais.operacoesFechadas)} fechadas no período`}
+        icon={Percent}
+        label="Custo/Lucro total"
+        value={custoLucro !== null ? `${custoLucro.toFixed(1)}%` : "—"}
+        hint="Custos ÷ resultado bruto do período"
       />
     </div>
   );
