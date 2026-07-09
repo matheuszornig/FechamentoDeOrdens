@@ -21,7 +21,10 @@ export interface TickerResult {
   /** Preço médio das vendas do período (null sem vendas). */
   precoMedioVenda: number | null;
   resultadoBruto: number;
-  /** Ajustes diários de futuros (AJUPOS) atribuídos à mercadoria. */
+  /**
+   * Financeiro de futuros da mercadoria: ajustes diários (AJUPOS) + liquidação
+   * dos negócios contra o ajuste do dia — é o resultado de bmf em reais.
+   */
   ajustesFuturos: number;
   custos: number;
   irrf: number;

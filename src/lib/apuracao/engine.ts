@@ -102,11 +102,11 @@ interface TickerAccumulator {
  *    custos rateados; IRRF registrado à parte.
  * 6. Posições abertas ao fim do período são listadas sem resultado realizado.
  * 7. Idempotente: notas duplicadas (nº nota + conta + mercado) são ignoradas.
- * 8. Futuros: AJUPOS fica fora do matching e entra como ajuste financeiro por
- *    mercadoria/dia; o resultado de futuros carregados é a soma dos ajustes —
- *    por isso fechamentos swing de bmf não geram resultado realizado próprio
- *    (evita dupla contagem), apenas atualizam a posição. Day trades de
- *    futuros entram no matching normal.
+ * 8. Futuros: todo o financeiro entra pelo canal de ajustes por
+ *    mercadoria/dia — a nota liquida cada linha (AJUPOS e negócios) contra o
+ *    ajuste do dia, já em reais. O matching de bmf serve só à estatística
+ *    (operações, quantidade fechada, PM, taxa de acerto); realizar por
+ *    diferença de preço duplicaria e estaria em pontos.
  * 9. Aluguel (loan) fica fora do matching, como linha separada.
  * 10. Exercício de opções ("EXERC OPC *"): a linha vira um negócio em ações
  *     no papel-objeto ao strike, e a série exercida é fechada a preço 0 na
@@ -355,7 +355,14 @@ export function apurar(
         const avgSell =
           sells.reduce((a, e) => a + e.price * e.quantity, 0) / sellQty;
         const bruto = matched * (avgSell - avgBuy);
-        acc.bruto += bruto;
+        // (8) bmf: o financeiro do dia já entrou pelos ajustes (cada linha
+        // da nota liquida contra o ajuste do dia) — realizar por diferença
+        // de preço duplicaria, e estaria em pontos, não em reais. O matching
+        // fica só como estatística; o sinal em pontos vale p/ taxa de acerto.
+        if (market !== "bmf") {
+          acc.bruto += bruto;
+          addDaily(date, bruto);
+        }
         acc.dayTradeQty += matched * 2;
         closedOps.push({
           date,
@@ -364,7 +371,6 @@ export function apurar(
           quantidade: matched,
           bruto,
         });
-        addDaily(date, bruto);
       }
 
       // Excedente vai para a posição (swing), a preço médio do dia.
@@ -397,19 +403,20 @@ export function apurar(
             ? closeQty * (price - pos.avgPrice) // long fechado por venda
             : closeQty * (pos.avgPrice - price); // short fechado por compra
 
-        // (8) bmf carregado: resultado vem dos ajustes diários — não realiza.
+        // (8) bmf carregado: resultado vem dos ajustes diários — não realiza
+        // financeiro por diferença de preço (só estatística de fechamento).
         if (market !== "bmf") {
           acc.bruto += bruto;
-          acc.swingClosedQty += closeQty;
-          closedOps.push({
-            date,
-            ticker,
-            tipo: "swing",
-            quantidade: closeQty,
-            bruto,
-          });
           addDaily(date, bruto);
         }
+        acc.swingClosedQty += closeQty;
+        closedOps.push({
+          date,
+          ticker,
+          tipo: "swing",
+          quantidade: closeQty,
+          bruto,
+        });
 
         pos.qty += pos.qty > 0 ? -closeQty : closeQty;
         const remainder = qty - closeQty;

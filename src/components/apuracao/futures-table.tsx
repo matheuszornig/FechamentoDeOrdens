@@ -180,8 +180,8 @@ export function FuturesTable({ result }: { result: ConsolidatedResult }) {
       <CardHeader>
         <CardTitle>Operações com futuros</CardTitle>
         <CardDescription>
-          Mercadorias BM&F do período — somatório dos ajustes diários (AJUPOS),
-          custos rateados e resultado líquido.
+          Mercadorias BM&F do período — somatório dos ajustes (AJUPOS e
+          liquidação diária dos negócios), custos rateados e resultado líquido.
         </CardDescription>
       </CardHeader>
       <CardContent>

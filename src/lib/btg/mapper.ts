@@ -302,7 +302,9 @@ function mapBmfNote(
   const trades: NormalizedTrade[] = [];
   const adjustments: FutureAdjustment[] = [];
 
-  for (const t of info.tradeList ?? []) {
+  // Payload real traz a tradeList no topo da nota (irmã de ticketInfo); o
+  // formato documentado a colocava dentro de ticketInfo — aceita ambos.
+  for (const t of note.tradeList ?? info.tradeList ?? []) {
     const ticker =
       typeof t.mercadoria === "string" && t.mercadoria !== "string"
         ? t.mercadoria.trim()
@@ -310,23 +312,37 @@ function mapBmfNote(
     if (!ticker) continue;
     const rawValue = toNumber(t.valorOperacao);
 
+    // valorOperacao é o financeiro da linha liquidado contra o ajuste do dia
+    // (AJUPOS: ajuste da posição carregada; NORMAL: preço do negócio vs
+    // ajuste). `dC` é o lado desse valor (D = débito ao cliente) — sem ele,
+    // vale o heurístico antigo pelo cV. A soma das linhas é o `valorNeg` da
+    // nota, já em reais (independe do multiplicador da mercadoria) — todo o
+    // resultado de futuros entra por este canal, fora do matching.
+    const dc = String(t.dC ?? "")
+      .trim()
+      .toUpperCase();
+    const value =
+      rawValue < 0
+        ? rawValue
+        : dc === "D"
+          ? -rawValue
+          : dc === "C"
+            ? rawValue
+            : String(t.cV).trim().toUpperCase() === "V"
+              ? -rawValue
+              : rawValue;
+    adjustments.push({ ticker, value: round2(value) });
+
     if (
       String(t.tipoNegocio ?? "")
         .trim()
         .toUpperCase() === "AJUPOS"
     ) {
-      // Ajuste diário de posição: não é abertura/fechamento. Valor já vem
-      // assinado; se vier absoluto, o lado "V" indica débito ao cliente.
-      const value =
-        rawValue < 0
-          ? rawValue
-          : String(t.cV).trim().toUpperCase() === "V"
-            ? -rawValue
-            : rawValue;
-      adjustments.push({ ticker, value: round2(value) });
       continue;
     }
 
+    // Negócio executado: entra no matching só para estatística (operações,
+    // quantidade fechada, PM) — o financeiro já foi contado acima.
     const quantity = toNumber(t.quantidade);
     if (quantity <= 0) continue;
     const price = toNumber(t.precoAjuste);
@@ -335,11 +351,10 @@ function mapBmfNote(
       side: String(t.cV).trim().toUpperCase() === "V" ? "sell" : "buy",
       quantity,
       price,
-      grossValue: Math.abs(rawValue) || quantity * price,
-      dayTradeHint:
-        String(t.dC ?? "")
-          .trim()
-          .toUpperCase() === "D",
+      // Em pontos×quantidade — serve para PM e peso do rateio de custos.
+      grossValue: quantity * price,
+      // dC aqui é débito/crédito do valor, não marcador de day trade.
+      dayTradeHint: false,
       maturity: parseBrDate(t.vencimento) ?? undefined,
     });
   }
@@ -359,14 +374,15 @@ function mapBmfNote(
     costs: {
       corretagem: Math.abs(toNumber(fin.operational_fee)),
       emolumentos: Math.abs(toNumber(fin.bmf_fee)),
-      liquidacao: 0,
+      liquidacao: Math.abs(toNumber(fin.clearing)),
       registro: Math.abs(toNumber(fin.registry_fee)),
       iss: Math.abs(toNumber(fin.iss)),
       pis: Math.abs(toNumber(fin.pis)),
       cofins: Math.abs(toNumber(fin.cofins)),
-      outros: Math.abs(toNumber(fin.cvm179_fee)),
+      outros:
+        Math.abs(toNumber(fin.cvm179_fee)) + Math.abs(toNumber(fin.other_fees)),
     },
-    irrf: 0,
+    irrf: Math.abs(toNumber(info.irrf)) + Math.abs(toNumber(info.irrfDayTrade)),
     summary: [],
   };
 }

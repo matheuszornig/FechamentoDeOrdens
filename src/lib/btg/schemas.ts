@@ -92,23 +92,29 @@ export const bmfFinancialSummarySchema = z.looseObject({
   bmf_fee: tolerantNumber,
   registry_fee: tolerantNumber,
   operational_fee: tolerantNumber,
+  clearing: tolerantNumber,
   iss: tolerantNumber,
   pis: tolerantNumber,
   cofins: tolerantNumber,
   cvm179_fee: tolerantNumber,
+  other_fees: tolerantNumber,
   total_fees: tolerantNumber,
   daytrade_adjustment: tolerantNumber,
   position_adjustment: tolerantNumber,
   total_net: tolerantNumber,
 });
 
+/** Payload real traz `tradeList` no topo da nota; o documentado, dentro de ticketInfo. */
 export const bmfNoteSchema = z.looseObject({
   financialSummary: bmfFinancialSummarySchema.optional(),
+  tradeList: z.array(bmfTradeSchema).optional(),
   ticketInfo: z
     .looseObject({
       numeroNota: z.union([z.string(), z.number()]).optional(),
       dataPregao: z.string().optional(),
       codCliente: z.union([z.string(), z.number()]).optional(),
+      irrf: tolerantNumber,
+      irrfDayTrade: tolerantNumber,
       tradeList: z.array(bmfTradeSchema).optional(),
     })
     .optional(),
