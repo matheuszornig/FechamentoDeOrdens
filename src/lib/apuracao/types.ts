@@ -21,7 +21,10 @@ export interface TickerResult {
   /** Preço médio das vendas do período (null sem vendas). */
   precoMedioVenda: number | null;
   resultadoBruto: number;
-  /** Ajustes diários de futuros (AJUPOS) atribuídos à mercadoria. */
+  /**
+   * Financeiro de futuros da mercadoria: ajustes diários (AJUPOS) + liquidação
+   * dos negócios contra o ajuste do dia — é o resultado de bmf em reais.
+   */
   ajustesFuturos: number;
   custos: number;
   irrf: number;
@@ -48,7 +51,11 @@ export interface TickerCosts extends CostBreakdown {
 export interface DailyPoint {
   /** Data do pregão (ISO). */
   date: string;
-  /** Resultado realizado do dia (day trade + swing), líquido de custos. */
+  /**
+   * Resultado realizado do dia (day trade + swing), líquido de custos —
+   * exclui futuros por completo (financeiro e custos ficam em
+   * `ajustesFuturos` e no custo por ticker da mercadoria).
+   */
   resultado: number;
   ajustesFuturos: number;
   aluguel: number;

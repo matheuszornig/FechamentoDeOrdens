@@ -1,6 +1,7 @@
 "use client";
 
 import { useTheme } from "next-themes";
+import { useMemo } from "react";
 import {
   Bar,
   CartesianGrid,
@@ -39,6 +40,8 @@ const PALETTE = {
   dark: { pos: "#059669", neg: "#ef4444", line: "#3b82f6" },
 } as const;
 
+const round2 = (n: number) => Math.round(n * 100) / 100;
+
 const compactBRL = new Intl.NumberFormat("pt-BR", {
   style: "currency",
   currency: "BRL",
@@ -46,8 +49,15 @@ const compactBRL = new Intl.NumberFormat("pt-BR", {
   maximumFractionDigits: 1,
 });
 
+/** Ponto plotado: só o realizado por ticker (sem futuros nem aluguel). */
+interface ChartPoint {
+  date: string;
+  resultado: number;
+  acumulado: number;
+}
+
 interface TooltipPayloadEntry {
-  payload?: DailyPoint;
+  payload?: ChartPoint;
 }
 
 function ChartTooltip({
@@ -61,9 +71,6 @@ function ChartTooltip({
   if (!active || !point) return null;
   const rows: Array<[string, number]> = [
     ["Resultado do dia", point.resultado],
-    ["Ajustes de futuros", point.ajustesFuturos],
-    ["Aluguel", point.aluguel],
-    ["Total do dia", point.total],
     ["Acumulado", point.acumulado],
   ];
   return (
@@ -85,13 +92,24 @@ export function PlChart({ data }: { data: DailyPoint[] }) {
   const { resolvedTheme } = useTheme();
   const colors = PALETTE[resolvedTheme === "dark" ? "dark" : "light"];
 
+  // Mesma base da tabela "Resultado fechado por ticker": só o realizado do
+  // dia, sem futuros (tabela própria) nem aluguel — acumulado recalculado
+  // sobre essa base.
+  const points = useMemo(() => {
+    let acumulado = 0;
+    return data.map<ChartPoint>((d) => {
+      acumulado = round2(acumulado + d.resultado);
+      return { date: d.date, resultado: d.resultado, acumulado };
+    });
+  }, [data]);
+
   return (
     <Card>
       <CardHeader>
         <CardTitle>Evolução do P/L</CardTitle>
         <CardDescription>
           Resultado realizado por dia de pregão (barras) e acumulado no período
-          (linha), incluindo ajustes de futuros e aluguel.
+          (linha) — sem futuros e aluguel, mesma base do resultado por ticker.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -102,7 +120,7 @@ export function PlChart({ data }: { data: DailyPoint[] }) {
         >
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart
-              data={data}
+              data={points}
               margin={{ top: 8, right: 8, bottom: 0, left: 8 }}
             >
               <CartesianGrid vertical={false} strokeOpacity={0.15} />
@@ -127,20 +145,20 @@ export function PlChart({ data }: { data: DailyPoint[] }) {
               />
               <Legend
                 formatter={(value: string) =>
-                  value === "total" ? "Resultado diário" : "Acumulado"
+                  value === "resultado" ? "Resultado diário" : "Acumulado"
                 }
               />
               <ReferenceLine y={0} strokeOpacity={0.3} />
               <Bar
-                dataKey="total"
-                name="total"
+                dataKey="resultado"
+                name="resultado"
                 radius={[4, 4, 0, 0]}
                 maxBarSize={24}
               >
-                {data.map((point) => (
+                {points.map((point) => (
                   <Cell
                     key={point.date}
-                    fill={point.total >= 0 ? colors.pos : colors.neg}
+                    fill={point.resultado >= 0 ? colors.pos : colors.neg}
                   />
                 ))}
               </Bar>
@@ -158,7 +176,7 @@ export function PlChart({ data }: { data: DailyPoint[] }) {
         <p className="mt-2 text-xs text-muted-foreground">
           Total acumulado no período:{" "}
           <span className="tabular-nums">
-            {formatBRL(data.at(-1)?.acumulado ?? 0)}
+            {formatBRL(points.at(-1)?.acumulado ?? 0)}
           </span>
         </p>
       </CardContent>

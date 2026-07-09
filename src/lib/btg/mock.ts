@@ -221,63 +221,79 @@ function buildBmfNote(
   const qty = Math.floor(rand() * 5) + 1;
   const buy = round2(60 + rand() * 10);
   const sell = round2(buy * (0.998 + rand() * 0.006));
+  const ajusteDia = round2(buy * (0.999 + rand() * 0.004));
+
+  // Formato real: cada linha liquida contra o ajuste do dia — valorOperacao
+  // é o financeiro (string absoluta) e dC diz o lado (D = débito ao cliente).
+  const MULT = 450;
+  const buyValue = round2((ajusteDia - buy) * qty * MULT);
+  const sellValue = round2((sell - ajusteDia) * qty * MULT);
+  const posValue = round2((rand() - 0.45) * 800);
 
   const tradeList = [
-    // Day trade casado de futuro — entra no matching normal.
+    // Day trade casado de futuro — financeiro nas duas pontas liquidadas.
     {
       mercadoria: future,
       cV: "C",
-      dC: "D",
-      quantidade: qty,
-      precoAjuste: buy,
-      valorOperacao: round2(qty * buy * 450),
+      dC: buyValue < 0 ? "D" : "C",
+      quantidade: String(qty),
+      precoAjuste: String(buy),
+      valorOperacao: String(Math.abs(buyValue)),
       vencimento,
       tipoNegocio: "NORMAL",
+      taxaOperacional: "40.0",
     },
     {
       mercadoria: future,
       cV: "V",
-      dC: "D",
-      quantidade: qty,
-      precoAjuste: sell,
-      valorOperacao: round2(qty * sell * 450),
+      dC: sellValue < 0 ? "D" : "C",
+      quantidade: String(qty),
+      precoAjuste: String(sell),
+      valorOperacao: String(Math.abs(sellValue)),
       vencimento,
       tipoNegocio: "NORMAL",
+      taxaOperacional: "40.0",
     },
     // Ajuste diário de posição carregada — fora do matching.
     {
       mercadoria:
         FUTURES[(Math.floor(rand() * FUTURES.length) + 1) % FUTURES.length][0],
-      cV: rand() < 0.5 ? "C" : "V",
-      dC: "",
-      quantidade: 2,
-      precoAjuste: 0,
-      valorOperacao: round2((rand() - 0.45) * 800),
+      cV: "C",
+      dC: posValue < 0 ? "D" : "C",
+      quantidade: "2",
+      precoAjuste: String(round2(60 + rand() * 10)),
+      valorOperacao: String(Math.abs(posValue)),
       vencimento,
       tipoNegocio: "AJUPOS",
+      taxaOperacional: "0.0",
     },
   ];
 
   const fees = round2(2 + rand() * 6);
+  const dayTradeAdj = round2(buyValue + sellValue);
   return {
+    tradeList,
     financialSummary: {
-      bmf_fee: -round2(fees * 0.3),
-      registry_fee: -round2(fees * 0.2),
-      operational_fee: -round2(fees * 0.4),
-      iss: -round2(fees * 0.05),
-      pis: -round2(fees * 0.01),
-      cofins: -round2(fees * 0.03),
-      cvm179_fee: -round2(fees * 0.01),
-      total_fees: -fees,
-      daytrade_adjustment: round2(qty * (sell - buy) * 450),
-      position_adjustment: tradeList[2].valorOperacao,
-      total_net: 0,
+      bmf_fee: String(-round2(fees * 0.3)),
+      registry_fee: String(-round2(fees * 0.2)),
+      operational_fee: String(-round2(fees * 0.4)),
+      clearing: "0.0",
+      iss: String(-round2(fees * 0.05)),
+      pis: String(-round2(fees * 0.01)),
+      cofins: String(-round2(fees * 0.03)),
+      other_fees: String(-round2(fees * 0.01)),
+      total_fees: String(-fees),
+      daytrade_adjustment: String(dayTradeAdj),
+      position_adjustment: String(posValue),
+      total_gross: String(round2(dayTradeAdj + posValue)),
+      total_net: "0.0",
     },
     ticketInfo: {
       numeroNota: String(noteNumber),
       dataPregao: toBrDate(isoDate),
       codCliente: account,
-      tradeList,
+      irrf: "0.0",
+      irrfDayTrade: "0.0",
     },
   };
 }

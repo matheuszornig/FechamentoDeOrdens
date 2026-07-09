@@ -9,6 +9,7 @@ import {
   parseTicker,
   prazoToExpiry,
   stripFractionalSuffix,
+  stripTermoSuffix,
   thirdFriday,
   toNumber,
 } from "./mapper";
@@ -35,6 +36,14 @@ describe("helpers de normalização", () => {
     expect(stripFractionalSuffix("ENGI11F")).toBe("ENGI11"); // unit, 2 dígitos
     expect(stripFractionalSuffix("PETR4")).toBe("PETR4"); // lote cheio, sem mudança
     expect(stripFractionalSuffix("CCMF25")).toBe("CCMF25"); // futuro, não é fracionário
+  });
+
+  it("junta o ticker do termo com o papel-objeto", () => {
+    expect(stripTermoSuffix("ASAI3T")).toBe("ASAI3");
+    expect(stripTermoSuffix("KEPL3T")).toBe("KEPL3");
+    expect(stripTermoSuffix("ENGI11T")).toBe("ENGI11"); // unit, 2 dígitos
+    expect(stripTermoSuffix("ASAI3")).toBe("ASAI3"); // à vista, sem mudança
+    expect(stripTermoSuffix("WINM26")).toBe("WINM26"); // futuro, não é termo
   });
 
   it("ignora placeholders 'string' sem falhar", () => {
@@ -245,6 +254,46 @@ describe("mapNotesPayload — mercado fracionário (bov)", () => {
     const [note] = mapNotesPayload(payload, "12345", "2026-01-05");
     expect(note.summary).toEqual([
       { ticker: "PETR4", quantity: 137, value: 5209.7 },
+    ]);
+  });
+
+  it("compra a termo (sufixo T) conta no papel-objeto", () => {
+    // Linha real observada: tipoMercado TERMO, ticker ASAI3T, spec normal.
+    const termoPayload = {
+      bov: [
+        {
+          ticketInfo: { numeroNota: "3", dataPregao: "19/01/2026" },
+          tradeList: [
+            {
+              cV: "C",
+              specTitulo: "ASAI3T\tON",
+              quantidade: "1260",
+              precoAjuste: "7.72",
+              valorOperacao: "9727.2",
+              tipoMercado: "TERMO",
+              prazo: "64",
+            },
+          ],
+          summarizedTradeList: [
+            {
+              specTitulo: "ASAI3T\tON",
+              quantidade: 1260,
+              valorOperacao: 9727.2,
+            },
+          ],
+        },
+      ],
+    };
+    const [note] = mapNotesPayload(termoPayload, "12345", "2026-01-19");
+    expect(note.trades[0]).toMatchObject({
+      ticker: "ASAI3",
+      side: "buy",
+      quantity: 1260,
+      price: 7.72,
+    });
+    expect(note.trades[0].maturity).toBeUndefined(); // prazo em dias ≠ vencimento de opção
+    expect(note.summary).toEqual([
+      { ticker: "ASAI3", quantity: 1260, value: 9727.2 },
     ]);
   });
 
@@ -496,81 +545,127 @@ describe("mapNotesPayload — exercício de opções (payload real)", () => {
 });
 
 describe("mapNotesPayload — bmf", () => {
+  // Formato real observado: tradeList no topo da nota (irmã de ticketInfo),
+  // valores como string com ponto decimal, dC = débito/crédito da linha.
   const payload = {
     bmf: [
       {
+        tradeList: [
+          {
+            mercadoria: "WINM26",
+            cV: "C",
+            dC: "D",
+            quantidade: "5",
+            precoAjuste: "170000.0",
+            valorOperacao: "120.5",
+            vencimento: "15/01/2027",
+            tipoNegocio: "NORMAL",
+            taxaOperacional: "40.0",
+          },
+          {
+            mercadoria: "WINM26",
+            cV: "V",
+            dC: "C",
+            quantidade: "5",
+            precoAjuste: "170300.0",
+            valorOperacao: "270.5",
+            vencimento: "15/01/2027",
+            tipoNegocio: "NORMAL",
+            taxaOperacional: "40.0",
+          },
+          {
+            mercadoria: "WINQ26",
+            cV: "C",
+            dC: "D",
+            quantidade: "2",
+            precoAjuste: "171000.0",
+            valorOperacao: "320.5",
+            vencimento: "18/08/2026",
+            tipoNegocio: "AJUPOS",
+            taxaOperacional: "0.0",
+          },
+        ],
         financialSummary: {
-          bmf_fee: -1.5,
-          registry_fee: -0.8,
-          operational_fee: -4.0,
-          iss: -0.2,
-          pis: -0.03,
-          cofins: -0.12,
-          cvm179_fee: -0.05,
-          total_fees: -6.7,
-          daytrade_adjustment: 150,
-          position_adjustment: -320.5,
-          total_net: -177.2,
+          bmf_fee: "-1.5",
+          registry_fee: "-0.8",
+          operational_fee: "-4.0",
+          clearing: "-0.6",
+          iss: "-0.2",
+          pis: "-0.03",
+          cofins: "-0.12",
+          other_fees: "-0.05",
+          total_fees: "-7.3",
+          daytrade_adjustment: "150.0",
+          position_adjustment: "-320.5",
+          total_net: "-177.2",
         },
         ticketInfo: {
           numeroNota: "778899",
           dataPregao: "05/01/2026",
           codCliente: "12345",
-          tradeList: [
-            {
-              mercadoria: "CCMF25",
-              cV: "C",
-              dC: "D",
-              quantidade: 5,
-              precoAjuste: 62.1,
-              valorOperacao: 139725,
-              vencimento: "15/01/2027",
-              tipoNegocio: "NORMAL",
-            },
-            {
-              mercadoria: "CCMF25",
-              cV: "V",
-              dC: "D",
-              quantidade: 5,
-              precoAjuste: 62.4,
-              valorOperacao: 140400,
-              vencimento: "15/01/2027",
-              tipoNegocio: "NORMAL",
-            },
-            {
-              mercadoria: "WINQ25",
-              cV: "V",
-              dC: "",
-              quantidade: 2,
-              precoAjuste: 0,
-              valorOperacao: 320.5,
-              vencimento: "18/08/2026",
-              tipoNegocio: "AJUPOS",
-            },
-          ],
+          irrf: "0.0",
+          irrfDayTrade: "1.2",
         },
       },
     ],
   };
 
-  it("custos negativos do financialSummary viram positivos", () => {
+  it("custos negativos do financialSummary viram positivos; IRRF vem do ticketInfo", () => {
     const [note] = mapNotesPayload(payload, "12345", "2026-01-05");
     expect(note.costs.corretagem).toBe(4.0);
     expect(note.costs.emolumentos).toBe(1.5);
+    expect(note.costs.liquidacao).toBe(0.6);
     expect(note.costs.registro).toBe(0.8);
     expect(note.costs.outros).toBe(0.05);
+    expect(note.irrf).toBe(1.2);
   });
 
-  it("AJUPOS vira ajuste financeiro fora do matching, com sinal pelo lado", () => {
+  it("toda linha liquida contra o ajuste do dia: NORMAL e AJUPOS viram ajustes assinados pelo dC", () => {
     const [note] = mapNotesPayload(payload, "12345", "2026-01-05");
-    expect(note.trades).toHaveLength(2); // só os NORMAL
-    expect(note.adjustments).toEqual([{ ticker: "WINQ25", value: -320.5 }]);
+    expect(note.adjustments).toEqual([
+      { ticker: "WINM26", value: -120.5 },
+      { ticker: "WINM26", value: 270.5 },
+      { ticker: "WINQ26", value: -320.5 },
+    ]);
+    // Negócios NORMAL entram no matching só como estatística.
+    expect(note.trades).toHaveLength(2);
     expect(note.trades[0]).toMatchObject({
-      ticker: "CCMF25",
+      ticker: "WINM26",
       side: "buy",
-      dayTradeHint: true,
+      quantity: 5,
+      price: 170000,
+      grossValue: 850000,
+      dayTradeHint: false,
       maturity: "2027-01-15",
     });
+  });
+
+  it("aceita tradeList dentro de ticketInfo (formato documentado), com sinal pelo cV sem dC", () => {
+    const legacy = {
+      bmf: [
+        {
+          ticketInfo: {
+            numeroNota: "1",
+            dataPregao: "05/01/2026",
+            tradeList: [
+              {
+                mercadoria: "CCMF25",
+                cV: "V",
+                dC: "",
+                quantidade: 5,
+                precoAjuste: 62.4,
+                valorOperacao: 312,
+                tipoNegocio: "NORMAL",
+              },
+            ],
+          },
+        },
+      ],
+    };
+    const [note] = mapNotesPayload(legacy, "12345", "2026-01-05");
+    expect(note.trades).toHaveLength(1);
+    expect(note.trades[0]).toMatchObject({ ticker: "CCMF25", side: "sell" });
+    expect(note.adjustments).toEqual([{ ticker: "CCMF25", value: -312 }]);
   });
 });
 

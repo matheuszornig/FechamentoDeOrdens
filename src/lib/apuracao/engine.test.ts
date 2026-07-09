@@ -215,30 +215,27 @@ describe("futuros (bmf)", () => {
     ]);
   });
 
-  it("day trade de futuros entra no matching normal", () => {
+  it("day trade de futuros: financeiro vem das linhas liquidadas, matching é só estatística", () => {
     const result = apurar([
       makeNote({
         market: "bmf",
         trades: [
-          trade({
-            ticker: "CCMF25",
-            side: "buy",
-            quantity: 5,
-            price: 62,
-            dayTradeHint: true,
-          }),
-          trade({
-            ticker: "CCMF25",
-            side: "sell",
-            quantity: 5,
-            price: 63,
-            dayTradeHint: true,
-          }),
+          trade({ ticker: "CCMF25", side: "buy", quantity: 5, price: 62 }),
+          trade({ ticker: "CCMF25", side: "sell", quantity: 5, price: 63 }),
+        ],
+        // Liquidação das duas pontas contra o ajuste do dia (em reais).
+        adjustments: [
+          { ticker: "CCMF25", value: -100 },
+          { ticker: "CCMF25", value: 150 },
         ],
       }),
     ]);
-    expect(result.porTicker[0].resultadoBruto).toBe(5);
-    expect(result.porTicker[0].modalidade).toBe("day_trade");
+    const t = result.porTicker[0];
+    expect(t.resultadoBruto).toBe(0); // nada realizado por diferença de preço
+    expect(t.ajustesFuturos).toBe(50);
+    expect(t.resultadoLiquido).toBe(50);
+    expect(t.modalidade).toBe("day_trade");
+    expect(t.quantidadeFechada).toBe(5);
   });
 
   it("futuro carregado não realiza swing (resultado vem dos ajustes)", () => {
@@ -266,6 +263,7 @@ describe("futuros (bmf)", () => {
     const t = result.porTicker.find((x) => x.ticker === "CCMF25");
     expect(t?.resultadoBruto).toBe(0); // sem dupla contagem com os ajustes
     expect(t?.ajustesFuturos).toBe(500);
+    expect(t?.quantidadeFechada).toBe(5); // estatística de fechamento conta
     expect(result.posicoesAbertas).toHaveLength(0); // posição zerou
   });
 });

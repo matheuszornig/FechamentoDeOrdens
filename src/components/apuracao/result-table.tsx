@@ -66,14 +66,15 @@ export function ResultTable({ result }: { result: ConsolidatedResult }) {
   ]);
 
   // Só operações com algo de fato fechado no período — posições apenas
-  // abertas (nada casado/exercido/vencido) não entram nesta tabela.
+  // abertas (nada casado/exercido/vencido) não entram nesta tabela. Futuros
+  // ficam de fora: têm tabela própria (Operações com futuros).
   const rows = useMemo(
-    () => result.porTicker.filter(isFechado),
+    () => result.porTicker.filter((t) => isFechado(t) && t.mercado !== "bmf"),
     [result.porTicker],
   );
 
-  // Mesma base usada nos cards de resumo (computeClosedTotals) — o rodapé
-  // desta tabela e os cards do topo sempre batem.
+  // Mesma base dos cards de resumo e do gráfico (computeClosedTotals, que já
+  // exclui futuros) — o rodapé desta tabela e os cards do topo sempre batem.
   const totais = useMemo(() => computeClosedTotals(result), [result]);
 
   const columns = useMemo<ColumnDef<TickerResult>[]>(
@@ -205,8 +206,8 @@ export function ResultTable({ result }: { result: ConsolidatedResult }) {
       <CardHeader>
         <CardTitle>Resultado fechado por ticker</CardTitle>
         <CardDescription>
-          Operações encerradas no período — bruto inclui ajustes diários de
-          futuros; líquido desconta os custos rateados.
+          Operações encerradas no período (exceto futuros, na tabela própria) —
+          líquido desconta os custos rateados.
         </CardDescription>
       </CardHeader>
       <CardContent>

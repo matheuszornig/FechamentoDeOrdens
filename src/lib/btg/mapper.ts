@@ -48,6 +48,23 @@ export function stripFractionalSuffix(ticker: string): string {
   return match ? match[1] : ticker;
 }
 
+const TERMO_SUFFIX_RE = /^([A-Z]{4}\d{1,2})T$/;
+
+/**
+ * Mercado a termo na B3 (tipoMercado "TERMO"): código do ativo + sufixo "T"
+ * (ex.: "ASAI3T" → "ASAI3"). A compra a termo é o próprio ativo com
+ * liquidação diferida — conta na posição/resultado do papel-objeto.
+ */
+export function stripTermoSuffix(ticker: string): string {
+  const match = ticker.match(TERMO_SUFFIX_RE);
+  return match ? match[1] : ticker;
+}
+
+/** Normalização de ticker à vista: junta fracionário ("F") e termo ("T"). */
+function normalizeBovTicker(ticker: string): string {
+  return stripTermoSuffix(stripFractionalSuffix(ticker));
+}
+
 /**
  * Converte para número; placeholders "string", null e NaN viram 0.
  * A API real envia números como string com decimal em PONTO ("378.0",
@@ -157,12 +174,10 @@ function mapBovNote(
   const trades: NormalizedTrade[] = [];
   for (const t of note.tradeList ?? []) {
     const rawTicker = parseTicker(t.specTitulo);
-    // Fracionário (sufixo "F") só existe no mercado à vista (bov) — junta
-    // com o lote cheio do mesmo papel.
+    // Fracionário ("F") e termo ("T") só existem no mercado à vista (bov) —
+    // juntam com o papel-objeto sob um único ticker.
     const ticker =
-      rawTicker && market === "bov"
-        ? stripFractionalSuffix(rawTicker)
-        : rawTicker;
+      rawTicker && market === "bov" ? normalizeBovTicker(rawTicker) : rawTicker;
     const quantity = toNumber(t.quantidade);
     if (!ticker || quantity <= 0) continue;
     const price = toNumber(t.precoAjuste);
@@ -215,8 +230,7 @@ function mapBovNote(
   for (const s of note.summarizedTradeList ?? []) {
     const rawTicker = parseTicker(s.specTitulo ?? s.titulo);
     if (!rawTicker) continue;
-    const ticker =
-      market === "bov" ? stripFractionalSuffix(rawTicker) : rawTicker;
+    const ticker = market === "bov" ? normalizeBovTicker(rawTicker) : rawTicker;
     const quantity =
       Math.abs(toNumber(s.quantidade)) ||
       Math.abs(toNumber(s.quantidadeTotalCompra)) +
@@ -302,7 +316,9 @@ function mapBmfNote(
   const trades: NormalizedTrade[] = [];
   const adjustments: FutureAdjustment[] = [];
 
-  for (const t of info.tradeList ?? []) {
+  // Payload real traz a tradeList no topo da nota (irmã de ticketInfo); o
+  // formato documentado a colocava dentro de ticketInfo — aceita ambos.
+  for (const t of note.tradeList ?? info.tradeList ?? []) {
     const ticker =
       typeof t.mercadoria === "string" && t.mercadoria !== "string"
         ? t.mercadoria.trim()
@@ -310,23 +326,37 @@ function mapBmfNote(
     if (!ticker) continue;
     const rawValue = toNumber(t.valorOperacao);
 
+    // valorOperacao é o financeiro da linha liquidado contra o ajuste do dia
+    // (AJUPOS: ajuste da posição carregada; NORMAL: preço do negócio vs
+    // ajuste). `dC` é o lado desse valor (D = débito ao cliente) — sem ele,
+    // vale o heurístico antigo pelo cV. A soma das linhas é o `valorNeg` da
+    // nota, já em reais (independe do multiplicador da mercadoria) — todo o
+    // resultado de futuros entra por este canal, fora do matching.
+    const dc = String(t.dC ?? "")
+      .trim()
+      .toUpperCase();
+    const value =
+      rawValue < 0
+        ? rawValue
+        : dc === "D"
+          ? -rawValue
+          : dc === "C"
+            ? rawValue
+            : String(t.cV).trim().toUpperCase() === "V"
+              ? -rawValue
+              : rawValue;
+    adjustments.push({ ticker, value: round2(value) });
+
     if (
       String(t.tipoNegocio ?? "")
         .trim()
         .toUpperCase() === "AJUPOS"
     ) {
-      // Ajuste diário de posição: não é abertura/fechamento. Valor já vem
-      // assinado; se vier absoluto, o lado "V" indica débito ao cliente.
-      const value =
-        rawValue < 0
-          ? rawValue
-          : String(t.cV).trim().toUpperCase() === "V"
-            ? -rawValue
-            : rawValue;
-      adjustments.push({ ticker, value: round2(value) });
       continue;
     }
 
+    // Negócio executado: entra no matching só para estatística (operações,
+    // quantidade fechada, PM) — o financeiro já foi contado acima.
     const quantity = toNumber(t.quantidade);
     if (quantity <= 0) continue;
     const price = toNumber(t.precoAjuste);
@@ -335,11 +365,10 @@ function mapBmfNote(
       side: String(t.cV).trim().toUpperCase() === "V" ? "sell" : "buy",
       quantity,
       price,
-      grossValue: Math.abs(rawValue) || quantity * price,
-      dayTradeHint:
-        String(t.dC ?? "")
-          .trim()
-          .toUpperCase() === "D",
+      // Em pontos×quantidade — serve para PM e peso do rateio de custos.
+      grossValue: quantity * price,
+      // dC aqui é débito/crédito do valor, não marcador de day trade.
+      dayTradeHint: false,
       maturity: parseBrDate(t.vencimento) ?? undefined,
     });
   }
@@ -359,14 +388,15 @@ function mapBmfNote(
     costs: {
       corretagem: Math.abs(toNumber(fin.operational_fee)),
       emolumentos: Math.abs(toNumber(fin.bmf_fee)),
-      liquidacao: 0,
+      liquidacao: Math.abs(toNumber(fin.clearing)),
       registro: Math.abs(toNumber(fin.registry_fee)),
       iss: Math.abs(toNumber(fin.iss)),
       pis: Math.abs(toNumber(fin.pis)),
       cofins: Math.abs(toNumber(fin.cofins)),
-      outros: Math.abs(toNumber(fin.cvm179_fee)),
+      outros:
+        Math.abs(toNumber(fin.cvm179_fee)) + Math.abs(toNumber(fin.other_fees)),
     },
-    irrf: 0,
+    irrf: Math.abs(toNumber(info.irrf)) + Math.abs(toNumber(info.irrfDayTrade)),
     summary: [],
   };
 }
