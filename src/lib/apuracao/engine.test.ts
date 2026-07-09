@@ -545,6 +545,45 @@ describe("aluguel (loan)", () => {
     expect(result.serieDiaria[0].aluguel).toBe(6.44);
     expect(result.totais.resultadoLiquido).toBe(6.44);
   });
+
+  it("IRRF do aluguel não vaza para custosTotais (fica só em aluguel.irrf)", () => {
+    const result = apurar([
+      makeNote({
+        market: "bov",
+        costs: { ...EMPTY_COSTS, corretagem: 5 },
+        irrf: 0.5,
+        trades: [
+          trade({ side: "buy", quantity: 100, price: 10 }),
+          trade({ side: "sell", quantity: 100, price: 11 }),
+        ],
+      }),
+      makeNote({
+        market: "loan",
+        loanLines: [
+          {
+            symbol: "PETR4",
+            side: "doador",
+            quantity: 300,
+            fee: 0,
+            remuneration: 12.4,
+            irrf: 1.86,
+          },
+        ],
+        irrf: 1.86,
+      }),
+    ]);
+    // custosTotais.irrf só reflete o IRRF de ações/opções/futuros — o rodapé
+    // da tabela "Custos por Ticker" bate com a soma das próprias linhas
+    // (nenhum ticker "aluguel" existe nessa tabela).
+    expect(result.custosTotais.irrf).toBe(0.5);
+    expect(result.custosTotais.total).toBe(5.5); // 5 (corretagem) + 0.5 (irrf trading)
+    expect(result.aluguel.irrf).toBe(1.86);
+    const sumRowsTotal = result.custosPorTicker.reduce(
+      (a, c) => a + c.total,
+      0,
+    );
+    expect(sumRowsTotal).toBe(result.custosTotais.total);
+  });
 });
 
 describe("idempotência", () => {

@@ -165,7 +165,13 @@ export function apurar(
     for (const key of COST_KEYS) {
       custosTotais[key] += note.costs[key];
     }
-    custosTotais.irrf += note.irrf;
+    // Aluguel é fora do matching (regra 5): seu IRRF vive só em
+    // `aluguel.irrf`, não em `custosTotais` — do contrário o rodapé da
+    // tabela "Custos por Ticker" soma um IRRF que não pertence a nenhuma
+    // linha de ticker (nenhum ticker "aluguel" existe em custosPorTicker).
+    if (note.market !== "loan") {
+      custosTotais.irrf += note.irrf;
+    }
 
     for (const adj of note.adjustments) {
       dailyAdjustments.set(
