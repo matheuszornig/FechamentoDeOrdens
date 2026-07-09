@@ -28,7 +28,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { computeClosedTotals, isFechado } from "@/lib/apuracao/closed-totals";
+import { isFechado } from "@/lib/apuracao/closed-totals";
 import type { ConsolidatedResult, TickerResult } from "@/lib/apuracao/types";
 import { formatBRL, formatBRLSigned, formatInt, plClass } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -66,15 +66,27 @@ export function ResultTable({ result }: { result: ConsolidatedResult }) {
   ]);
 
   // Só operações com algo de fato fechado no período — posições apenas
-  // abertas (nada casado/exercido/vencido) não entram nesta tabela.
+  // abertas (nada casado/exercido/vencido) não entram nesta tabela. Futuros
+  // ficam de fora: têm tabela própria (Operações com futuros).
   const rows = useMemo(
-    () => result.porTicker.filter(isFechado),
+    () => result.porTicker.filter((t) => isFechado(t) && t.mercado !== "bmf"),
     [result.porTicker],
   );
 
-  // Mesma base usada nos cards de resumo (computeClosedTotals) — o rodapé
-  // desta tabela e os cards do topo sempre batem.
-  const totais = useMemo(() => computeClosedTotals(result), [result]);
+  // Rodapé soma só as linhas exibidas — o card "Resultado líquido do período"
+  // (computeClosedTotals) equivale a este rodapé + o da tabela de futuros.
+  const totais = useMemo(
+    () =>
+      rows.reduce(
+        (acc, t) => ({
+          bruto: acc.bruto + t.resultadoBruto + t.ajustesFuturos,
+          custos: acc.custos + t.custos,
+          liquido: acc.liquido + t.resultadoLiquido,
+        }),
+        { bruto: 0, custos: 0, liquido: 0 },
+      ),
+    [rows],
+  );
 
   const columns = useMemo<ColumnDef<TickerResult>[]>(
     () => [
@@ -205,8 +217,8 @@ export function ResultTable({ result }: { result: ConsolidatedResult }) {
       <CardHeader>
         <CardTitle>Resultado fechado por ticker</CardTitle>
         <CardDescription>
-          Operações encerradas no período — bruto inclui ajustes diários de
-          futuros; líquido desconta os custos rateados.
+          Operações encerradas no período (exceto futuros, na tabela própria) —
+          líquido desconta os custos rateados.
         </CardDescription>
       </CardHeader>
       <CardContent>
