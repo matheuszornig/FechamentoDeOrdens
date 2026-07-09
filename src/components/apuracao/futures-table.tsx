@@ -77,12 +77,11 @@ export function FuturesTable({ result }: { result: ConsolidatedResult }) {
     () =>
       rows.reduce(
         (acc, t) => ({
-          operacoes: acc.operacoes + t.operacoes,
           ajustes: acc.ajustes + t.ajustesFuturos,
           custos: acc.custos + t.custos,
           liquido: acc.liquido + t.resultadoLiquido,
         }),
-        { operacoes: 0, ajustes: 0, custos: 0, liquido: 0 },
+        { ajustes: 0, custos: 0, liquido: 0 },
       ),
     [rows],
   );
@@ -96,17 +95,6 @@ export function FuturesTable({ result }: { result: ConsolidatedResult }) {
         ),
         cell: ({ row }) => (
           <span className="font-medium">{row.original.ticker}</span>
-        ),
-      },
-      {
-        accessorKey: "operacoes",
-        header: ({ column }) => (
-          <SortableHeader label="Operações" column={column} />
-        ),
-        cell: ({ row }) => (
-          <span className="tabular-nums">
-            {formatInt(row.original.operacoes)}
-          </span>
         ),
       },
       {
@@ -218,9 +206,6 @@ export function FuturesTable({ result }: { result: ConsolidatedResult }) {
             <TableFooter>
               <TableRow>
                 <TableCell>Total</TableCell>
-                <TableCell className="tabular-nums">
-                  {formatInt(totais.operacoes)}
-                </TableCell>
                 <TableCell />
                 <TableCell
                   className={cn("tabular-nums", plClass(totais.ajustes))}
