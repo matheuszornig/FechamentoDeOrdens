@@ -52,9 +52,10 @@ export interface DailyPoint {
   /** Data do pregão (ISO). */
   date: string;
   /**
-   * Resultado realizado do dia (day trade + swing), líquido de custos —
-   * exclui futuros por completo (financeiro e custos ficam em
-   * `ajustesFuturos` e no custo por ticker da mercadoria).
+   * Resultado realizado do dia (day trade + swing), líquido de custos e
+   * IRRF, somando só os tickers fechados fora de futuros — mesma base do
+   * card "Resultado líquido do período": o acumulado da série converge para
+   * ele. Futuros ficam por completo em `ajustesFuturos`/custos por ticker.
    */
   resultado: number;
   ajustesFuturos: number;

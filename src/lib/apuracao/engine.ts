@@ -270,7 +270,10 @@ export function apurar(
   const tickers = new Map<string, TickerAccumulator>();
   const positions = new Map<string, PositionState>();
   const closedOps: ClosedOperation[] = [];
-  const dailyRealized = new Map<string, number>();
+  // Razão diário por ticker (data → ticker → valor): a série do gráfico soma,
+  // na consolidação, só os tickers fechados fora de futuros — mesma base do
+  // card "Resultado líquido do período" e da tabela por ticker.
+  const dailyByTicker = new Map<string, Map<string, number>>();
 
   const tickerKey = (market: Market, ticker: string) => `${market}|${ticker}`;
   const getAcc = (market: Market, ticker: string): TickerAccumulator => {
@@ -296,8 +299,13 @@ export function apurar(
     return acc;
   };
 
-  const addDaily = (date: string, value: number) => {
-    dailyRealized.set(date, (dailyRealized.get(date) ?? 0) + value);
+  const addDaily = (date: string, key: string, value: number) => {
+    let day = dailyByTicker.get(date);
+    if (!day) {
+      day = new Map();
+      dailyByTicker.set(date, day);
+    }
+    day.set(key, (day.get(key) ?? 0) + value);
   };
 
   // Agrupa eventos por (data, mercado, ticker) preservando ordem cronológica.
@@ -328,12 +336,16 @@ export function apurar(
       acc.costs[key2] += ev.costs[key2];
     }
     acc.costs.irrf += ev.irrf;
-    // Custos do dia entram na série diária no dia em que ocorrem (IRRF fica
-    // fora do líquido, registrado à parte — regra 5). Futuros ficam fora da
-    // série realizada por completo (custos inclusive): seu financeiro vive
-    // no canal de ajustes e é exibido/somado à parte.
+    // Custos (com IRRF) entram na série diária no dia em que ocorrem — o
+    // líquido por ticker também desconta o IRRF, e a série segue a mesma
+    // definição. Futuros ficam fora da série realizada por completo: seu
+    // financeiro vive no canal de ajustes e é exibido/somado à parte.
     if (ev.market !== "bmf") {
-      addDaily(ev.date, -Object.values(ev.costs).reduce((a, b) => a + b, 0));
+      addDaily(
+        ev.date,
+        key,
+        -Object.values(ev.costs).reduce((a, b) => a + b, 0) - ev.irrf,
+      );
     }
   }
 
@@ -365,7 +377,7 @@ export function apurar(
         // fica só como estatística; o sinal em pontos vale p/ taxa de acerto.
         if (market !== "bmf") {
           acc.bruto += bruto;
-          addDaily(date, bruto);
+          addDaily(date, key, bruto);
         }
         acc.dayTradeQty += matched * 2;
         closedOps.push({
@@ -411,7 +423,7 @@ export function apurar(
         // financeiro por diferença de preço (só estatística de fechamento).
         if (market !== "bmf") {
           acc.bruto += bruto;
-          addDaily(date, bruto);
+          addDaily(date, posKey, bruto);
         }
         acc.swingClosedQty += closeQty;
         closedOps.push({
@@ -480,7 +492,7 @@ export function apurar(
       quantidade: closeQty,
       bruto,
     });
-    addDaily(date, bruto);
+    addDaily(date, posKey, bruto);
     pos.qty += pos.qty > 0 ? -closeQty : closeQty;
     if (pos.qty === 0) pos.avgPrice = 0;
     positions.set(posKey, pos);
@@ -588,16 +600,29 @@ export function apurar(
   }
   posicoesAbertas.sort((a, b) => a.ticker.localeCompare(b.ticker));
 
-  // Série diária de P/L: realizado + ajustes de futuros + aluguel, com acumulado.
+  // Série diária de P/L: o `resultado` soma o razão diário só dos tickers
+  // fechados fora de futuros — a mesma base de closed-totals (card do topo,
+  // rodapé do resultado por ticker e gráfico); o acumulado final converge
+  // para o "Resultado líquido do período". Custos de tickers que ficaram
+  // só-abertos ficam de fora, como ficam do card.
+  const fechadoKeys = new Set<string>();
+  for (const [key, acc] of tickers) {
+    const fechada = acc.dayTradeQty / 2 + acc.swingClosedQty;
+    if (acc.market !== "bmf" && fechada !== 0) fechadoKeys.add(key);
+  }
+
   const allDates = new Set<string>([
-    ...dailyRealized.keys(),
+    ...dailyByTicker.keys(),
     ...dailyAdjustments.keys(),
     ...dailyLoan.keys(),
   ]);
   const serieDiaria: DailyPoint[] = [];
   let acumulado = 0;
   for (const date of [...allDates].sort()) {
-    const resultado = dailyRealized.get(date) ?? 0;
+    let resultado = 0;
+    for (const [key, value] of dailyByTicker.get(date) ?? []) {
+      if (fechadoKeys.has(key)) resultado += value;
+    }
     const ajustes = dailyAdjustments.get(date) ?? 0;
     const aluguelDia = dailyLoan.get(date) ?? 0;
     const total = resultado + ajustes + aluguelDia;
