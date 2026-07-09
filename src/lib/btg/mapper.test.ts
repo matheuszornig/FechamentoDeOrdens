@@ -80,6 +80,13 @@ describe("helpers de normalização", () => {
     expect(deriveUnderlying("VALES795", "UNT")).toBe("VALE11");
     expect(deriveUnderlying("AZZAQ205", "XX")).toBeNull();
   });
+
+  it("exercício de opção de ETF/unit (sem especificação na nota) vira sufixo 11", () => {
+    // Nota real: "BOVAE17E" (sem "\t") — BOVA11 exercida. Diferente de ações,
+    // que sempre trazem "\tON"/"\tPN" (confirmado em todo exercício real
+    // observado nas contas testadas).
+    expect(deriveUnderlying("BOVAE17", undefined)).toBe("BOVA11");
+  });
 });
 
 describe("mapNotesPayload — bov/option", () => {
@@ -457,6 +464,34 @@ describe("mapNotesPayload — exercício de opções (payload real)", () => {
     const [note] = mapNotesPayload(optionPayload, "004121241", "2026-01-05");
     expect(note.trades[0].maturity).toBe("2026-07-17");
     expect(note.trades[0].exercise).toBeUndefined();
+  });
+
+  it("exercício de opção de ETF (BOVA11) sem specTitulo tabulado deriva o papel-objeto mesmo assim", () => {
+    // Linha real observada (conta 004936963, nota 31981276): sem "\t" —
+    // diferente das ações, cujo exercício sempre traz "\tON"/"\tPN".
+    const payload = {
+      bov: [
+        {
+          ticketInfo: { numeroNota: "31981276", dataPregao: "15/05/2026" },
+          tradeList: [
+            {
+              cV: "V",
+              dC: "C",
+              quantidade: "19959",
+              specTitulo: "BOVAE17E",
+              precoAjuste: "170.0",
+              tipoMercado: "EXERC OPC COMPRA",
+              valorOperacao: "3393030.0",
+            },
+          ],
+        },
+      ],
+    };
+    const [note] = mapNotesPayload(payload, "004936963", "2026-05-15");
+    expect(note.trades[0]).toMatchObject({
+      ticker: "BOVAE17E",
+      exercise: { optionTicker: "BOVAE17", underlying: "BOVA11" },
+    });
   });
 });
 

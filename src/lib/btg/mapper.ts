@@ -116,6 +116,11 @@ const SPEC_SUFFIX: Record<string, string> = {
 /**
  * Papel-objeto de um exercício: raiz (4 letras) da série + sufixo da
  * especificação ("AZZAQ205" + "ON" → "AZZA3"). Null quando não derivável.
+ *
+ * Opções de ETF/unit (ex.: BOVA11) não trazem especificação nenhuma na nota
+ * (sem "\t", diferente de ações — confirmado em todo exercício real
+ * observado: 100% dos de ações têm spec, só o de BOVA11 não tem) — nesse
+ * caso o papel-objeto é sempre o próprio unit, sufixo "11".
  */
 export function deriveUnderlying(
   optionTicker: string,
@@ -123,7 +128,8 @@ export function deriveUnderlying(
 ): string | null {
   const root = optionTicker.slice(0, 4);
   if (root.length < 4) return null;
-  const specWord = (spec ?? "").trim().split(/\s+/)[0]?.toUpperCase() ?? "";
+  if (spec === undefined) return `${root}11`;
+  const specWord = spec.trim().split(/\s+/)[0]?.toUpperCase() ?? "";
   const suffix = SPEC_SUFFIX[specWord];
   return suffix ? `${root}${suffix}` : null;
 }
