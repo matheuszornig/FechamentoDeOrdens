@@ -170,7 +170,7 @@ describe("rateio de custos", () => {
     expect(vale?.corretagem).toBe(30); // 3000/4000 × 40
   });
 
-  it("líquido = bruto − custos rateados, com IRRF registrado à parte", () => {
+  it("líquido = bruto − custos rateados − IRRF; custos do ticker inclui o IRRF", () => {
     const result = apurar([
       makeNote({
         costs: { ...EMPTY_COSTS, corretagem: 20 },
@@ -183,8 +183,10 @@ describe("rateio de custos", () => {
     ]);
     const t = result.porTicker[0];
     expect(t.resultadoBruto).toBe(100);
-    expect(t.custos).toBe(20);
-    expect(t.resultadoLiquido).toBe(80); // IRRF não abate o líquido
+    // "Custos" do ticker = mesma definição de custosPorTicker[i].total —
+    // inclui o IRRF, para as duas tabelas baterem por ticker.
+    expect(t.custos).toBe(21.05); // 20 (corretagem) + 1.05 (irrf)
+    expect(t.resultadoLiquido).toBe(78.95); // 100 − 21.05
     expect(t.irrf).toBe(1.05);
     expect(result.custosTotais.irrf).toBe(1.05);
   });

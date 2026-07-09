@@ -128,7 +128,7 @@ describe("buildAuditWorkbook", () => {
       "Quantidade Fechada": 100, // day trade casado: 100 compradas × 100 vendidas
       "PM Compra": 10,
       "PM Venda": 11,
-      "Resultado Líquido": 95, // 100 × (11-10) − 5 de corretagem
+      "Resultado Líquido": 94.5, // 100 × (11-10) − 5 de corretagem − 0.5 de IRRF
     });
   });
 

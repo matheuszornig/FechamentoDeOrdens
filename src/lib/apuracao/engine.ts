@@ -512,7 +512,12 @@ export function apurar(
   for (const [key, acc] of tickers) {
     const ticker = key.split("|")[1];
     const custosTotal = COST_KEYS.reduce((a, k) => a + acc.costs[k], 0);
-    const liquido = acc.bruto + acc.ajustes - custosTotal;
+    // "Custos" do ticker inclui o IRRF — mesma definição de
+    // custosPorTicker[i].total, para as duas tabelas baterem por ticker.
+    // Consequência: líquido = bruto − custos (com IRRF) por ticker, e não
+    // mais "bruto − custosTotal" isolado (o IRRF passa a abater o líquido).
+    const custosComIrrf = custosTotal + acc.costs.irrf;
+    const liquido = acc.bruto + acc.ajustes - custosComIrrf;
 
     let modalidade: Modalidade;
     if (acc.dayTradeQty > 0 && acc.swingClosedQty > 0) modalidade = "mista";
@@ -536,7 +541,7 @@ export function apurar(
         acc.sellQty > 0 ? round2(acc.sellValue / acc.sellQty) : null,
       resultadoBruto: round2(acc.bruto),
       ajustesFuturos: round2(acc.ajustes),
-      custos: round2(custosTotal),
+      custos: round2(custosComIrrf),
       irrf: round2(acc.costs.irrf),
       resultadoLiquido: round2(liquido),
     });
@@ -552,7 +557,7 @@ export function apurar(
       cofins: round2(acc.costs.cofins),
       outros: round2(acc.costs.outros),
       irrf: round2(acc.costs.irrf),
-      total: round2(custosTotal + acc.costs.irrf),
+      total: round2(custosComIrrf),
     });
   }
   porTicker.sort((a, b) => b.resultadoLiquido - a.resultadoLiquido);
@@ -633,7 +638,9 @@ export function apurar(
     totais: {
       resultadoLiquido: round2(resultadoLiquido),
       resultadoBruto: round2(resultadoBruto),
-      custos: round2(totalCustos),
+      // Inclui o IRRF (trading) — mesma definição de custosTotais.total, para
+      // "Custos totais" do período bater com o rodapé de "Custos por Ticker".
+      custos: round2(totalCustos + custosTotais.irrf),
       irrf: round2(custosTotais.irrf),
       operacoes: events.length,
       operacoesFechadas: closedOps.length,
