@@ -9,6 +9,7 @@ import {
   parseTicker,
   prazoToExpiry,
   stripFractionalSuffix,
+  stripTermoSuffix,
   thirdFriday,
   toNumber,
 } from "./mapper";
@@ -35,6 +36,14 @@ describe("helpers de normalização", () => {
     expect(stripFractionalSuffix("ENGI11F")).toBe("ENGI11"); // unit, 2 dígitos
     expect(stripFractionalSuffix("PETR4")).toBe("PETR4"); // lote cheio, sem mudança
     expect(stripFractionalSuffix("CCMF25")).toBe("CCMF25"); // futuro, não é fracionário
+  });
+
+  it("junta o ticker do termo com o papel-objeto", () => {
+    expect(stripTermoSuffix("ASAI3T")).toBe("ASAI3");
+    expect(stripTermoSuffix("KEPL3T")).toBe("KEPL3");
+    expect(stripTermoSuffix("ENGI11T")).toBe("ENGI11"); // unit, 2 dígitos
+    expect(stripTermoSuffix("ASAI3")).toBe("ASAI3"); // à vista, sem mudança
+    expect(stripTermoSuffix("WINM26")).toBe("WINM26"); // futuro, não é termo
   });
 
   it("ignora placeholders 'string' sem falhar", () => {
@@ -245,6 +254,46 @@ describe("mapNotesPayload — mercado fracionário (bov)", () => {
     const [note] = mapNotesPayload(payload, "12345", "2026-01-05");
     expect(note.summary).toEqual([
       { ticker: "PETR4", quantity: 137, value: 5209.7 },
+    ]);
+  });
+
+  it("compra a termo (sufixo T) conta no papel-objeto", () => {
+    // Linha real observada: tipoMercado TERMO, ticker ASAI3T, spec normal.
+    const termoPayload = {
+      bov: [
+        {
+          ticketInfo: { numeroNota: "3", dataPregao: "19/01/2026" },
+          tradeList: [
+            {
+              cV: "C",
+              specTitulo: "ASAI3T\tON",
+              quantidade: "1260",
+              precoAjuste: "7.72",
+              valorOperacao: "9727.2",
+              tipoMercado: "TERMO",
+              prazo: "64",
+            },
+          ],
+          summarizedTradeList: [
+            {
+              specTitulo: "ASAI3T\tON",
+              quantidade: 1260,
+              valorOperacao: 9727.2,
+            },
+          ],
+        },
+      ],
+    };
+    const [note] = mapNotesPayload(termoPayload, "12345", "2026-01-19");
+    expect(note.trades[0]).toMatchObject({
+      ticker: "ASAI3",
+      side: "buy",
+      quantity: 1260,
+      price: 7.72,
+    });
+    expect(note.trades[0].maturity).toBeUndefined(); // prazo em dias ≠ vencimento de opção
+    expect(note.summary).toEqual([
+      { ticker: "ASAI3", quantity: 1260, value: 9727.2 },
     ]);
   });
 

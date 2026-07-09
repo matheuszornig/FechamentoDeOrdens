@@ -48,6 +48,23 @@ export function stripFractionalSuffix(ticker: string): string {
   return match ? match[1] : ticker;
 }
 
+const TERMO_SUFFIX_RE = /^([A-Z]{4}\d{1,2})T$/;
+
+/**
+ * Mercado a termo na B3 (tipoMercado "TERMO"): código do ativo + sufixo "T"
+ * (ex.: "ASAI3T" → "ASAI3"). A compra a termo é o próprio ativo com
+ * liquidação diferida — conta na posição/resultado do papel-objeto.
+ */
+export function stripTermoSuffix(ticker: string): string {
+  const match = ticker.match(TERMO_SUFFIX_RE);
+  return match ? match[1] : ticker;
+}
+
+/** Normalização de ticker à vista: junta fracionário ("F") e termo ("T"). */
+function normalizeBovTicker(ticker: string): string {
+  return stripTermoSuffix(stripFractionalSuffix(ticker));
+}
+
 /**
  * Converte para número; placeholders "string", null e NaN viram 0.
  * A API real envia números como string com decimal em PONTO ("378.0",
@@ -157,12 +174,10 @@ function mapBovNote(
   const trades: NormalizedTrade[] = [];
   for (const t of note.tradeList ?? []) {
     const rawTicker = parseTicker(t.specTitulo);
-    // Fracionário (sufixo "F") só existe no mercado à vista (bov) — junta
-    // com o lote cheio do mesmo papel.
+    // Fracionário ("F") e termo ("T") só existem no mercado à vista (bov) —
+    // juntam com o papel-objeto sob um único ticker.
     const ticker =
-      rawTicker && market === "bov"
-        ? stripFractionalSuffix(rawTicker)
-        : rawTicker;
+      rawTicker && market === "bov" ? normalizeBovTicker(rawTicker) : rawTicker;
     const quantity = toNumber(t.quantidade);
     if (!ticker || quantity <= 0) continue;
     const price = toNumber(t.precoAjuste);
@@ -215,8 +230,7 @@ function mapBovNote(
   for (const s of note.summarizedTradeList ?? []) {
     const rawTicker = parseTicker(s.specTitulo ?? s.titulo);
     if (!rawTicker) continue;
-    const ticker =
-      market === "bov" ? stripFractionalSuffix(rawTicker) : rawTicker;
+    const ticker = market === "bov" ? normalizeBovTicker(rawTicker) : rawTicker;
     const quantity =
       Math.abs(toNumber(s.quantidade)) ||
       Math.abs(toNumber(s.quantidadeTotalCompra)) +
