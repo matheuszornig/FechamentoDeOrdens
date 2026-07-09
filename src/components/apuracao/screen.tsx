@@ -13,6 +13,7 @@ import type { ApuracaoFilter } from "@/lib/apuracao/validation";
 import { signOut } from "@/lib/auth-client";
 import { CostsTable } from "./costs-table";
 import { FilterCard } from "./filter-card";
+import { FuturesTable } from "./futures-table";
 import { isActiveStatus, type JobResponse } from "./job-types";
 import { PlChart } from "./pl-chart";
 import { ProgressCard } from "./progress-card";
@@ -210,6 +211,7 @@ export function ApuracaoScreen({ userEmail }: { userEmail: string }) {
           <SummaryCards result={job.result} />
           <PlChart data={job.result.serieDiaria} />
           <ResultTable result={job.result} />
+          <FuturesTable result={job.result} />
           <CostsTable result={job.result} />
         </>
       )}
