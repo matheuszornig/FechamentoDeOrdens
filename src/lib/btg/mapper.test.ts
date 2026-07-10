@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  deriveOptionExpiry,
   deriveUnderlying,
   mapNotesPayload,
   mapNotesPayloadWithRaw,
@@ -856,6 +857,8 @@ describe("mapPositionPayload — posição D-1 (renda variável)", () => {
         market: "option",
         quantity: -100,
         avgPrice: 0.55,
+        // B = call de fevereiro; próximo vencimento após 31/12/2025.
+        maturity: "2026-02-20",
       },
     ]);
   });
@@ -870,5 +873,24 @@ describe("mapPositionPayload — posição D-1 (renda variável)", () => {
     expect(Object.keys(trimmed).sort()).toEqual(["Equities", "PositionDate"]);
     // O bruto reduzido continua re-mapeável, com o mesmo resultado.
     expect(mapPositionPayload(trimmed)).toEqual(mapPositionPayload(payload));
+  });
+});
+
+describe("deriveOptionExpiry — vencimento pelo ticker da série", () => {
+  it("resolve mês pela letra (calls A–L, puts M–X) e ano pelo próximo vencimento", () => {
+    // Séries reais da conta 004939149, referência 31/12/2025.
+    expect(deriveOptionExpiry("BRAVS200", "2025-12-31")).toBe("2026-07-17"); // S = put jul
+    expect(deriveOptionExpiry("VALEH894", "2025-12-31")).toBe("2026-08-21"); // H = call ago
+    expect(deriveOptionExpiry("BBDCH20", "2025-12-31")).toBe("2026-08-21");
+    // Mês já passado na data de referência → ano seguinte.
+    expect(deriveOptionExpiry("PETRB280", "2025-12-31")).toBe("2026-02-20");
+    // No próprio dia do vencimento ainda conta como passado (estritamente após).
+    expect(deriveOptionExpiry("BRAVS200", "2026-07-17")).toBe("2027-07-16");
+  });
+
+  it("não deriva para tickers que não são série de opção", () => {
+    expect(deriveOptionExpiry("VALE3", "2025-12-31")).toBeNull();
+    expect(deriveOptionExpiry("ENGI11", "2025-12-31")).toBeNull();
+    expect(deriveOptionExpiry("BRAVS200", "31/12/2025")).toBeNull(); // referência deve ser ISO
   });
 });

@@ -111,6 +111,11 @@ export interface InitialPosition {
   /** Assinada: >0 comprado, <0 vendido. */
   quantity: number;
   avgPrice: number;
+  /**
+   * Vencimento (ISO) derivado do ticker da série (opções) — a posição não
+   * traz prazo; sem isso, série que não negocia no período nunca venceria.
+   */
+  maturity?: string;
 }
 
 /** Resultado da consulta de posição (iaas-api-position) na API. */

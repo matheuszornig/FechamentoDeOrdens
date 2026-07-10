@@ -122,6 +122,59 @@ export function prazoToExpiry(prazo: unknown): string | null {
   return thirdFriday(2000 + Number(m[2]), Number(m[1]));
 }
 
+/** Letra da série de opção (5º caractere) → mês: calls A–L, puts M–X. */
+const SERIES_MONTH: Record<string, number> = {
+  A: 1,
+  B: 2,
+  C: 3,
+  D: 4,
+  E: 5,
+  F: 6,
+  G: 7,
+  H: 8,
+  I: 9,
+  J: 10,
+  K: 11,
+  L: 12,
+  M: 1,
+  N: 2,
+  O: 3,
+  P: 4,
+  Q: 5,
+  R: 6,
+  S: 7,
+  T: 8,
+  U: 9,
+  V: 10,
+  W: 11,
+  X: 12,
+};
+
+/**
+ * Vencimento derivado do próprio ticker da série ("BRAVS200" → S = put de
+ * julho): o ano não é codificado, então assume o PRÓXIMO vencimento (3ª
+ * sexta) estritamente posterior a `referenceIso`. Usado para opções vindas
+ * da posição D-1, cuja série não negociou no período — sem nota, não há
+ * campo `prazo` para informar o vencimento. Heurística: falha só para séries
+ * a mais de 12 meses do vencimento (raras em carteira).
+ */
+export function deriveOptionExpiry(
+  optionTicker: string,
+  referenceIso: string,
+): string | null {
+  const m = optionTicker
+    .trim()
+    .toUpperCase()
+    .match(/^[A-Z]{4}([A-X])\d/);
+  if (!m || !/^\d{4}-\d{2}-\d{2}/.test(referenceIso)) return null;
+  const month = SERIES_MONTH[m[1]];
+  const refYear = Number(referenceIso.slice(0, 4));
+  const candidate = thirdFriday(refYear, month);
+  return candidate > referenceIso.slice(0, 10)
+    ? candidate
+    : thirdFriday(refYear + 1, month);
+}
+
 /** Especificação do papel → sufixo numérico do ticker à vista. */
 const SPEC_SUFFIX: Record<string, string> = {
   ON: "3",
@@ -535,10 +588,12 @@ export function mapNotesPayloadWithRaw(
  * Extrai as posições de renda variável do payload de posição: ações/ETFs/FIIs
  * (StockPositions → bov) e opções (OptionPositions → option). Quantidade
  * assinada (>0 comprado, <0 vendido); preço médio de AveragePrice.Price.
- * Itens sem ticker, sem quantidade ou zerados são ignorados.
+ * Opções ganham o vencimento derivado do ticker (próxima 3ª sexta do mês da
+ * série após PositionDate). Itens sem ticker/quantidade são ignorados.
  */
 export function mapPositionPayload(payload: unknown): InitialPosition[] {
   const parsed = positionResponseSchema.parse(payload ?? {});
+  const positionDate = parseBrDate(parsed.PositionDate);
   const positions: InitialPosition[] = [];
 
   const push = (
@@ -550,11 +605,16 @@ export function mapPositionPayload(payload: unknown): InitialPosition[] {
         typeof item.Ticker === "string" ? item.Ticker.trim() : null;
       const quantity = toNumber(item.Quantity);
       if (!ticker || quantity === 0) continue;
+      const maturity =
+        market === "option" && positionDate
+          ? (deriveOptionExpiry(ticker, positionDate) ?? undefined)
+          : undefined;
       positions.push({
         ticker,
         market,
         quantity,
         avgPrice: toNumber(item.AveragePrice?.Price),
+        ...(maturity ? { maturity } : {}),
       });
     }
   };

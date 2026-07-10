@@ -830,3 +830,89 @@ describe("posição inicial (D-1)", () => {
     ]);
   });
 });
+
+describe("vencimento de opção herdada da posição D-1", () => {
+  it("série que não negociou no período vence pelo maturity derivado do ticker", () => {
+    const result = apurar([], {
+      endDate: "2026-07-31",
+      initialPositions: [
+        {
+          ticker: "BRAVS200",
+          market: "option",
+          quantity: -4000,
+          avgPrice: 1.5,
+          maturity: "2026-07-17",
+        },
+      ],
+    });
+    const t = result.porTicker.find((x) => x.ticker === "BRAVS200");
+    expect(t?.resultadoBruto).toBe(6000); // short: prêmio 1,50 × 4000 no vencimento
+    expect(t?.quantidadeFechada).toBe(4000);
+    expect(result.posicoesAbertas).toHaveLength(0);
+    expect(
+      result.serieDiaria.find((d) => d.date === "2026-07-17")?.resultado,
+    ).toBe(6000);
+  });
+
+  it("vencimento após o fim do período mantém a série aberta", () => {
+    const result = apurar([], {
+      endDate: "2026-07-08",
+      initialPositions: [
+        {
+          ticker: "BRAVS200",
+          market: "option",
+          quantity: -4000,
+          avgPrice: 1.5,
+          maturity: "2026-07-17",
+        },
+      ],
+    });
+    expect(result.porTicker).toHaveLength(0);
+    expect(result.posicoesAbertas).toEqual([
+      {
+        ticker: "BRAVS200",
+        mercado: "option",
+        side: "vendido",
+        quantidade: 4000,
+        precoMedio: 1.5,
+      },
+    ]);
+  });
+
+  it("prazo vindo de nota do período tem precedência sobre o derivado", () => {
+    // Nota do período informa vencimento em agosto; o derivado (julho) não
+    // deve fechar a série antes disso.
+    const result = apurar(
+      [
+        makeNote({
+          market: "option",
+          date: "2026-01-05",
+          trades: [
+            trade({
+              ticker: "BRAVS200",
+              side: "sell",
+              quantity: 1000,
+              price: 1.6,
+              maturity: "2026-08-21",
+            }),
+          ],
+        }),
+      ],
+      {
+        endDate: "2026-07-31",
+        initialPositions: [
+          {
+            ticker: "BRAVS200",
+            market: "option",
+            quantity: -4000,
+            avgPrice: 1.5,
+            maturity: "2026-07-17",
+          },
+        ],
+      },
+    );
+    // Nada venceu até 31/07 (prazo real é 21/08) — posição segue aberta.
+    expect(result.posicoesAbertas).toHaveLength(1);
+    expect(result.posicoesAbertas[0].quantidade).toBe(5000);
+  });
+});

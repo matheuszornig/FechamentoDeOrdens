@@ -322,6 +322,13 @@ export function apurar(
       qty: (current?.qty ?? 0) + p.quantity,
       avgPrice: p.avgPrice,
     });
+    // Vencimento derivado do ticker da série: só quando nenhuma nota do
+    // período informou o prazo (a nota é a fonte autoritativa; o derivado é
+    // heurística para série herdada de D-1 que não negociou no período —
+    // sem isso ela nunca venceria dentro do período).
+    if (p.market === "option" && p.maturity && !optionMaturities.has(key)) {
+      optionMaturities.set(key, p.maturity);
+    }
   }
 
   // Agrupa eventos por (data, mercado, ticker) preservando ordem cronológica.
