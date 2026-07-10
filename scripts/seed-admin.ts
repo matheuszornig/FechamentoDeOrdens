@@ -26,10 +26,20 @@ async function main() {
   const db = drizzle(neon(DATABASE_URL), { schema });
 
   const existing = await db
-    .select({ id: schema.user.id })
+    .select({ id: schema.user.id, role: schema.user.role })
     .from(schema.user)
     .where(eq(schema.user.email, ADMIN_EMAIL));
   if (existing.length > 0) {
+    // Idempotente também para a promoção: garante role=admin (necessário ao
+    // plugin admin — gestão de usuários em /usuarios).
+    if (existing[0].role !== "admin") {
+      await db
+        .update(schema.user)
+        .set({ role: "admin" })
+        .where(eq(schema.user.id, existing[0].id));
+      console.log(`[seed] Usuário ${ADMIN_EMAIL} promovido a admin.`);
+      return;
+    }
     console.log(`[seed] Usuário ${ADMIN_EMAIL} já existe — nada a fazer.`);
     return;
   }
@@ -46,6 +56,10 @@ async function main() {
   await auth.api.signUpEmail({
     body: { email: ADMIN_EMAIL, password: ADMIN_PASSWORD, name: "Admin" },
   });
+  await db
+    .update(schema.user)
+    .set({ role: "admin" })
+    .where(eq(schema.user.email, ADMIN_EMAIL));
   console.log(`[seed] Usuário admin ${ADMIN_EMAIL} criado com sucesso.`);
 }
 

@@ -15,6 +15,13 @@
       "when": 1783690877899,
       "tag": "0001_pale_captain_flint",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1783709033616,
+      "tag": "0002_slippery_zodiak",
+      "breakpoints": true
     }
   ]
 }

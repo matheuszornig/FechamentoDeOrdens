@@ -1,5 +1,6 @@
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
+import { admin } from "better-auth/plugins";
 import { getDb, schema } from "@/db";
 
 /**
@@ -28,8 +29,9 @@ function resolveTrustedOrigins(): string[] {
 }
 
 /**
- * Instância server-side do Better Auth. Cadastro desabilitado: o único
- * usuário admin é criado pelo seed (scripts/seed-admin.ts / workflow seed.yml).
+ * Instância server-side do Better Auth. Cadastro desabilitado: o admin é
+ * criado pelo seed (scripts/seed-admin.ts) e os demais usuários pelo próprio
+ * admin via plugin admin (página /usuarios).
  */
 function createAuth() {
   return betterAuth({
@@ -38,6 +40,7 @@ function createAuth() {
       enabled: true,
       disableSignUp: true,
     },
+    plugins: [admin()],
     secret: process.env.BETTER_AUTH_SECRET,
     baseURL: resolveBaseUrl(),
     trustedOrigins: resolveTrustedOrigins(),
