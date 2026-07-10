@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  deriveOptionExpiry,
   deriveUnderlying,
   mapNotesPayload,
   mapNotesPayloadWithRaw,
+  mapPositionPayload,
   normalizeCost,
   normalizeDoc,
   parseBrDate,
@@ -12,6 +14,7 @@ import {
   stripTermoSuffix,
   thirdFriday,
   toNumber,
+  trimPositionPayload,
 } from "./mapper";
 
 describe("helpers de normalização", () => {
@@ -804,5 +807,136 @@ describe("mapNotesPayloadWithRaw — rawPayload por nota (não por dia)", () => 
     );
     const plain = mapNotesPayload(payload, "12345", "2026-01-05");
     expect(plain).toEqual(withRaw);
+  });
+});
+
+describe("mapPositionPayload — posição D-1 (renda variável)", () => {
+  // Formato real do iaas-api-position observado em 2026-07: números como
+  // string com ponto decimal, preço médio em AveragePrice.Price.
+  const payload = {
+    ContractVersion: "1.0",
+    AccountNumber: "005259408",
+    PositionDate: "2025-12-31T00:00:00",
+    FixedIncome: [{ Ticker: "IGNORADO", Quantity: "10.0" }],
+    Equities: [
+      {
+        ForwardPositions: [],
+        OptionPositions: [
+          {
+            Ticker: "PETRB380",
+            Quantity: "-100.0",
+            AveragePrice: { Price: "0.55" },
+          },
+        ],
+        StockPositions: [
+          {
+            Ticker: "VALE3",
+            Quantity: "500.0",
+            MarketPrice: "71.96",
+            AveragePrice: { Price: "54.1369", Adjustable: "false" },
+          },
+          {
+            Ticker: "BRAV3",
+            Quantity: "1600.0",
+            AveragePrice: { Price: "18.799012" },
+          },
+          // Zerada/incompleta: ignorada.
+          { Ticker: "ZERO3", Quantity: "0.0" },
+          { Quantity: "100.0" },
+        ],
+      },
+    ],
+  };
+
+  it("extrai ações (bov) e opções (option) com quantidade assinada e preço médio", () => {
+    expect(mapPositionPayload(payload)).toEqual([
+      { ticker: "VALE3", market: "bov", quantity: 500, avgPrice: 54.1369 },
+      { ticker: "BRAV3", market: "bov", quantity: 1600, avgPrice: 18.799012 },
+      {
+        ticker: "PETRB380",
+        market: "option",
+        quantity: -100,
+        avgPrice: 0.55,
+        // B = call de fevereiro; próximo vencimento após 31/12/2025.
+        maturity: "2026-02-20",
+      },
+    ]);
+  });
+
+  it("opção real: MaturityDate da API vence a heurística e BuySell dá o sinal", () => {
+    // Item real observado (conta 004122171, posição de 30/09/2025).
+    const real = {
+      PositionDate: "2025-09-30T00:00:00",
+      Equities: [
+        {
+          StockPositions: [],
+          OptionPositions: [
+            {
+              Ticker: "BPANL600",
+              BuySell: "Comprada",
+              Quantity: "10500.0",
+              StrikePrice: "6.0",
+              OptionType: "Call",
+              MaturityDate: "2025-12-19T00:00:00Z",
+              AveragePrice: { Price: "2.355746", Adjustable: "false" },
+            },
+            {
+              Ticker: "VALEH894",
+              BuySell: "Vendida",
+              Quantity: "11000.0",
+              MaturityDate: "2026-08-21T00:00:00Z",
+              AveragePrice: { Price: "1.2" },
+            },
+          ],
+        },
+      ],
+    };
+    expect(mapPositionPayload(real)).toEqual([
+      {
+        ticker: "BPANL600",
+        market: "option",
+        quantity: 10500,
+        avgPrice: 2.355746,
+        maturity: "2025-12-19",
+      },
+      {
+        ticker: "VALEH894",
+        market: "option",
+        quantity: -11000, // Vendida com Quantity positiva → short
+        avgPrice: 1.2,
+        maturity: "2026-08-21",
+      },
+    ]);
+  });
+
+  it("renda fixa/fundos ficam de fora; payload vazio vira lista vazia", () => {
+    expect(mapPositionPayload({})).toEqual([]);
+    expect(mapPositionPayload({ Equities: [] })).toEqual([]);
+  });
+
+  it("trimPositionPayload guarda só PositionDate + Equities", () => {
+    const trimmed = trimPositionPayload(payload) as Record<string, unknown>;
+    expect(Object.keys(trimmed).sort()).toEqual(["Equities", "PositionDate"]);
+    // O bruto reduzido continua re-mapeável, com o mesmo resultado.
+    expect(mapPositionPayload(trimmed)).toEqual(mapPositionPayload(payload));
+  });
+});
+
+describe("deriveOptionExpiry — vencimento pelo ticker da série", () => {
+  it("resolve mês pela letra (calls A–L, puts M–X) e ano pelo próximo vencimento", () => {
+    // Séries reais da conta 004939149, referência 31/12/2025.
+    expect(deriveOptionExpiry("BRAVS200", "2025-12-31")).toBe("2026-07-17"); // S = put jul
+    expect(deriveOptionExpiry("VALEH894", "2025-12-31")).toBe("2026-08-21"); // H = call ago
+    expect(deriveOptionExpiry("BBDCH20", "2025-12-31")).toBe("2026-08-21");
+    // Mês já passado na data de referência → ano seguinte.
+    expect(deriveOptionExpiry("PETRB280", "2025-12-31")).toBe("2026-02-20");
+    // No próprio dia do vencimento ainda conta como passado (estritamente após).
+    expect(deriveOptionExpiry("BRAVS200", "2026-07-17")).toBe("2027-07-16");
+  });
+
+  it("não deriva para tickers que não são série de opção", () => {
+    expect(deriveOptionExpiry("VALE3", "2025-12-31")).toBeNull();
+    expect(deriveOptionExpiry("ENGI11", "2025-12-31")).toBeNull();
+    expect(deriveOptionExpiry("BRAVS200", "31/12/2025")).toBeNull(); // referência deve ser ISO
   });
 });

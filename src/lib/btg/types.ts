@@ -101,7 +101,33 @@ export type FetchNotesResult =
   | { kind: "notes"; raw: unknown; notes: NormalizedNote[] }
   | { kind: "empty" };
 
+/**
+ * Posição de renda variável em uma data (D-1 do período), semeada no motor
+ * como posição inicial — vendas subsequentes realizam contra este preço médio.
+ */
+export interface InitialPosition {
+  ticker: string;
+  market: Market;
+  /** Assinada: >0 comprado, <0 vendido. */
+  quantity: number;
+  avgPrice: number;
+  /**
+   * Vencimento (ISO) derivado do ticker da série (opções) — a posição não
+   * traz prazo; sem isso, série que não negocia no período nunca venceria.
+   */
+  maturity?: string;
+}
+
+/** Resultado da consulta de posição (iaas-api-position) na API. */
+export type FetchPositionResult =
+  | { kind: "position"; raw: unknown; positions: InitialPosition[] }
+  | { kind: "empty" };
+
 /** Interface única — implementada pelo cliente real e pelo mock. */
 export interface BtgService {
   fetchNotes(accountNumber: string, isoDate: string): Promise<FetchNotesResult>;
+  fetchPosition(
+    accountNumber: string,
+    isoDate: string,
+  ): Promise<FetchPositionResult>;
 }

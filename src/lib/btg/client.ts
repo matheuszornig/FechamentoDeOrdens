@@ -1,9 +1,14 @@
-import { mapNotesPayload } from "./mapper";
+import { mapNotesPayload, mapPositionPayload } from "./mapper";
 import { RateLimiter } from "./rate-limiter";
-import type { BtgService, FetchNotesResult } from "./types";
+import type {
+  BtgService,
+  FetchNotesResult,
+  FetchPositionResult,
+} from "./types";
 
 const TOKEN_PATH = "/iaas-auth/api/v1/authorization/oauth2/accesstoken";
 const NOTES_PATH = "/iaas-brokerage-notes/api/v1/brokerage-notes/account";
+const POSITION_PATH = "/iaas-api-position/api/v1/position";
 
 export type BtgToken = {
   accessToken: string;
@@ -193,6 +198,73 @@ export class BtgClient implements BtgService {
 
       throw new Error(
         `API BTG retornou ${res.status} para ${accountNumber}/${isoDate}`,
+      );
+    }
+  }
+
+  /**
+   * Posição da conta em uma data (D-1 do período apurado) — endpoint
+   * iaas-api-position, mesma autenticação das notas (access_token +
+   * x-id-partner-request). 404/204 = sem posição publicada (não é erro).
+   */
+  async fetchPosition(
+    accountNumber: string,
+    isoDate: string,
+  ): Promise<FetchPositionResult> {
+    let attempt = 0;
+    let renewedOn401 = false;
+
+    for (;;) {
+      await this.rateLimiter.acquire();
+      const token = await this.getToken();
+
+      let res: Response;
+      try {
+        res = await this.fetchFn(
+          `${this.baseUrl}${POSITION_PATH}/${accountNumber}`,
+          {
+            method: "POST",
+            headers: {
+              access_token: token.accessToken,
+              "x-id-partner-request": token.xIdPactual || crypto.randomUUID(),
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ date: isoDate }),
+          },
+        );
+      } catch (err) {
+        if (attempt >= this.maxRetries) throw err;
+        await this.sleep(this.backoffMs(attempt));
+        attempt += 1;
+        continue;
+      }
+
+      if (res.status === 200) {
+        const raw: unknown = await res.json();
+        return { kind: "position", raw, positions: mapPositionPayload(raw) };
+      }
+
+      if (res.status === 404 || res.status === 204) {
+        return { kind: "empty" };
+      }
+
+      if (res.status === 401 && !renewedOn401) {
+        renewedOn401 = true;
+        await this.getToken(true);
+        continue;
+      }
+
+      if (
+        (res.status === 429 || res.status >= 500) &&
+        attempt < this.maxRetries
+      ) {
+        await this.sleep(this.backoffMs(attempt));
+        attempt += 1;
+        continue;
+      }
+
+      throw new Error(
+        `API BTG (posição) retornou ${res.status} para ${accountNumber}/${isoDate}`,
       );
     }
   }

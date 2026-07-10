@@ -156,3 +156,35 @@ export type LoanNote = z.infer<typeof loanNoteSchema>;
 export type BrokerageNotesResponse = z.infer<
   typeof brokerageNotesResponseSchema
 >;
+
+/**
+ * Posição (iaas-api-position). Só a renda variável interessa: Equities traz
+ * StockPositions/OptionPositions com Ticker, Quantity e AveragePrice.Price
+ * (formato real observado em 2026-07: números como string com ponto decimal).
+ */
+export const equityPositionItemSchema = z.looseObject({
+  Ticker: z.string().optional(),
+  Quantity: tolerantNumber,
+  /** Opções: "Comprada" | "Vendida" — o sinal pode não vir na Quantity. */
+  BuySell: z.string().optional(),
+  /** Opções: vencimento informado pela própria API (ISO com timezone). */
+  MaturityDate: z.string().optional(),
+  AveragePrice: z
+    .looseObject({
+      Price: tolerantNumber,
+    })
+    .nullish(),
+});
+
+export const equitiesSectionSchema = z.looseObject({
+  StockPositions: z.array(equityPositionItemSchema).nullish(),
+  OptionPositions: z.array(equityPositionItemSchema).nullish(),
+});
+
+export const positionResponseSchema = z.looseObject({
+  PositionDate: z.string().optional(),
+  Equities: z.array(equitiesSectionSchema).nullish(),
+});
+
+export type EquityPositionItem = z.infer<typeof equityPositionItemSchema>;
+export type PositionResponse = z.infer<typeof positionResponseSchema>;

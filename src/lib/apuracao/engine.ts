@@ -1,4 +1,4 @@
-import type { Market, NormalizedNote } from "@/lib/btg/types";
+import type { InitialPosition, Market, NormalizedNote } from "@/lib/btg/types";
 import type {
   AluguelSummary,
   ConsolidatedResult,
@@ -140,7 +140,7 @@ export function dedupeNotes(notes: NormalizedNote[]): NormalizedNote[] {
 
 export function apurar(
   notes: NormalizedNote[],
-  opts: { endDate?: string } = {},
+  opts: { endDate?: string; initialPositions?: InitialPosition[] } = {},
 ): ConsolidatedResult {
   const alertas: string[] = [];
 
@@ -307,6 +307,29 @@ export function apurar(
     }
     day.set(key, (day.get(key) ?? 0) + value);
   };
+
+  // Posição inicial (D-1 do período, opcional): semeia o estado de posições
+  // antes de processar os negócios — vendas subsequentes realizam contra o
+  // preço médio da corretora, exercícios de séries abertas antes do período
+  // deixam de alertar, e o que não for mexido aparece em posições abertas.
+  // Não conta como negócio (operações/quantidade/PM ficam só com o período).
+  for (const p of opts.initialPositions ?? []) {
+    if (!p.ticker || p.quantity === 0) continue;
+    const key = tickerKey(p.market, p.ticker);
+    const current = positions.get(key);
+    positions.set(key, {
+      market: p.market,
+      qty: (current?.qty ?? 0) + p.quantity,
+      avgPrice: p.avgPrice,
+    });
+    // Vencimento derivado do ticker da série: só quando nenhuma nota do
+    // período informou o prazo (a nota é a fonte autoritativa; o derivado é
+    // heurística para série herdada de D-1 que não negociou no período —
+    // sem isso ela nunca venceria dentro do período).
+    if (p.market === "option" && p.maturity && !optionMaturities.has(key)) {
+      optionMaturities.set(key, p.maturity);
+    }
+  }
 
   // Agrupa eventos por (data, mercado, ticker) preservando ordem cronológica.
   const byDate = new Map<string, Map<string, TradeEvent[]>>();

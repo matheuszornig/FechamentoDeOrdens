@@ -140,6 +140,13 @@ export const apuracaoJob = pgTable("apuracao_job", {
   errorMessage: text("error_message"),
   result: jsonb("result"),
   alerts: jsonb("alerts"),
+  /** Semear a apuração com a posição da conta em D-1 do início (opcional). */
+  includePosition: boolean("include_position").notNull().default(false),
+  /**
+   * Resposta da API de posição reduzida à renda variável ({PositionDate,
+   * Equities}) — bruto re-mapeável, preenchida uma vez na fase de cálculo.
+   */
+  positionPayload: jsonb("position_payload"),
   /** Lock/heartbeat do processamento retomável: renovado a cada data buscada. */
   lockedAt: timestamp("locked_at"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
