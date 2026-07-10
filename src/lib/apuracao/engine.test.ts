@@ -764,6 +764,75 @@ describe("posição inicial (D-1)", () => {
     ]);
   });
 
+  it("PM compra/venda englobam a carteira herdada (caso real GOLD11)", () => {
+    // Conta real 004083842, 01–08/07/2026: carteira de 20.000 @ 22,852782;
+    // venda de 5.000 @ 22,31 (fecha parte da carteira, prejuízo real) e
+    // compra de 5.000 @ 21,64 depois (recompõe posição).
+    const result = apurar(
+      [
+        makeNote({
+          date: "2026-07-02",
+          trades: [
+            trade({
+              ticker: "GOLD11",
+              side: "sell",
+              quantity: 5000,
+              price: 22.31,
+            }),
+          ],
+        }),
+        makeNote({
+          date: "2026-07-08",
+          trades: [
+            trade({
+              ticker: "GOLD11",
+              side: "buy",
+              quantity: 5000,
+              price: 21.64,
+            }),
+          ],
+        }),
+      ],
+      {
+        initialPositions: [
+          {
+            ticker: "GOLD11",
+            market: "bov",
+            quantity: 20000,
+            avgPrice: 22.852782,
+          },
+        ],
+      },
+    );
+    const t = result.porTicker.find((x) => x.ticker === "GOLD11");
+    // (20000×22,852782 + 5000×21,64) / 25000 — carteira + compra do período.
+    expect(t?.precoMedioCompra).toBe(22.61);
+    expect(t?.precoMedioVenda).toBe(22.31);
+    // PM venda < PM compra, coerente com o prejuízo realizado.
+    expect(t?.resultadoBruto).toBe(-2713.91);
+  });
+
+  it("short herdado entra no PM venda", () => {
+    const result = apurar(
+      [
+        makeNote({
+          date: "2026-01-05",
+          trades: [
+            trade({ ticker: "PETR4", side: "buy", quantity: 50, price: 9 }),
+          ],
+        }),
+      ],
+      {
+        initialPositions: [
+          { ticker: "PETR4", market: "bov", quantity: -50, avgPrice: 11 },
+        ],
+      },
+    );
+    const t = result.porTicker.find((x) => x.ticker === "PETR4");
+    expect(t?.precoMedioVenda).toBe(11); // só a carteira vendida
+    expect(t?.precoMedioCompra).toBe(9); // só a recompra do período
+  });
+
   it("posição semeada não mexida só aparece em posições abertas (sem linha de resultado)", () => {
     const result = apurar([], {
       initialPositions: [

@@ -313,6 +313,15 @@ export function apurar(
   // preço médio da corretora, exercícios de séries abertas antes do período
   // deixam de alertar, e o que não for mexido aparece em posições abertas.
   // Não conta como negócio (operações/quantidade/PM ficam só com o período).
+  // PM da carteira herdada por ticker: entra na média das colunas PM compra
+  // (posição comprada) e PM venda (posição vendida) junto com os negócios do
+  // período — aplicado só na consolidação, para ticker herdado que não
+  // negociou no período não ganhar linha própria no resultado/custos.
+  const seedPm = new Map<
+    string,
+    { buyQty: number; buyValue: number; sellQty: number; sellValue: number }
+  >();
+
   for (const p of opts.initialPositions ?? []) {
     if (!p.ticker || p.quantity === 0) continue;
     const key = tickerKey(p.market, p.ticker);
@@ -322,6 +331,22 @@ export function apurar(
       qty: (current?.qty ?? 0) + p.quantity,
       avgPrice: p.avgPrice,
     });
+
+    const pm = seedPm.get(key) ?? {
+      buyQty: 0,
+      buyValue: 0,
+      sellQty: 0,
+      sellValue: 0,
+    };
+    if (p.quantity > 0) {
+      pm.buyQty += p.quantity;
+      pm.buyValue += p.quantity * p.avgPrice;
+    } else {
+      pm.sellQty += -p.quantity;
+      pm.sellValue += -p.quantity * p.avgPrice;
+    }
+    seedPm.set(key, pm);
+
     // Vencimento derivado do ticker da série: só quando nenhuma nota do
     // período informou o prazo (a nota é a fonte autoritativa; o derivado é
     // heurística para série herdada de D-1 que não negociou no período —
@@ -571,6 +596,16 @@ export function apurar(
     else if (acc.swingClosedQty > 0) modalidade = "swing";
     else modalidade = "posicao";
 
+    // PM compra/venda englobam a carteira herdada (D-1) quando houver:
+    // a posição comprada entra como "compra" ao PM da corretora e a vendida
+    // como "venda" — os PMs exibidos passam a refletir o custo real casado
+    // com o resultado (ex.: venda no período contra posição herdada).
+    const seed = seedPm.get(key);
+    const buyQty = acc.buyQty + (seed?.buyQty ?? 0);
+    const buyValue = acc.buyValue + (seed?.buyValue ?? 0);
+    const sellQty = acc.sellQty + (seed?.sellQty ?? 0);
+    const sellValue = acc.sellValue + (seed?.sellValue ?? 0);
+
     porTicker.push({
       ticker,
       mercado: acc.market,
@@ -581,10 +616,8 @@ export function apurar(
       // isso divide por 2; swingClosedQty já é de uma ponta só (inclui
       // fechamentos de swing, exercício e vencimento — regra 10/11).
       quantidadeFechada: round2(acc.dayTradeQty / 2 + acc.swingClosedQty),
-      precoMedioCompra:
-        acc.buyQty > 0 ? round2(acc.buyValue / acc.buyQty) : null,
-      precoMedioVenda:
-        acc.sellQty > 0 ? round2(acc.sellValue / acc.sellQty) : null,
+      precoMedioCompra: buyQty > 0 ? round2(buyValue / buyQty) : null,
+      precoMedioVenda: sellQty > 0 ? round2(sellValue / sellQty) : null,
       resultadoBruto: round2(acc.bruto),
       ajustesFuturos: round2(acc.ajustes),
       custos: round2(custosComIrrf),

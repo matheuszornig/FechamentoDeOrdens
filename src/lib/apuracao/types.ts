@@ -16,9 +16,15 @@ export interface TickerResult {
    * 500 de quantidade fechada.
    */
   quantidadeFechada: number;
-  /** Preço médio das compras do período (null sem compras). */
+  /**
+   * Preço médio das compras (null sem compras). Com posição inicial (D-1),
+   * a carteira comprada herdada entra na média pelo PM da corretora.
+   */
   precoMedioCompra: number | null;
-  /** Preço médio das vendas do período (null sem vendas). */
+  /**
+   * Preço médio das vendas (null sem vendas). Com posição inicial (D-1),
+   * a carteira vendida (short) herdada entra na média pelo PM da corretora.
+   */
   precoMedioVenda: number | null;
   resultadoBruto: number;
   /**
