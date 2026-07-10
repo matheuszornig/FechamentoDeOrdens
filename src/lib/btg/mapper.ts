@@ -603,11 +603,23 @@ export function mapPositionPayload(payload: unknown): InitialPosition[] {
     for (const item of items ?? []) {
       const ticker =
         typeof item.Ticker === "string" ? item.Ticker.trim() : null;
-      const quantity = toNumber(item.Quantity);
+      let quantity = toNumber(item.Quantity);
       if (!ticker || quantity === 0) continue;
+      // Opções indicam o lado em BuySell ("Comprada"/"Vendida") com a
+      // quantidade positiva (formato real observado); ações trazem o sinal
+      // na própria Quantity (ex.: short via aluguel vem negativo).
+      const buySell = String(item.BuySell ?? "")
+        .trim()
+        .toUpperCase();
+      if (buySell.startsWith("V") && quantity > 0) quantity = -quantity;
+      // Vencimento: o MaturityDate da API é autoritativo; sem ele, deriva
+      // do ticker da série (próxima 3ª sexta do mês codificado na letra).
       const maturity =
-        market === "option" && positionDate
-          ? (deriveOptionExpiry(ticker, positionDate) ?? undefined)
+        market === "option"
+          ? (parseBrDate(item.MaturityDate) ??
+            (positionDate
+              ? (deriveOptionExpiry(ticker, positionDate) ?? undefined)
+              : undefined))
           : undefined;
       positions.push({
         ticker,

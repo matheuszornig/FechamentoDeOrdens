@@ -863,6 +863,52 @@ describe("mapPositionPayload — posição D-1 (renda variável)", () => {
     ]);
   });
 
+  it("opção real: MaturityDate da API vence a heurística e BuySell dá o sinal", () => {
+    // Item real observado (conta 004122171, posição de 30/09/2025).
+    const real = {
+      PositionDate: "2025-09-30T00:00:00",
+      Equities: [
+        {
+          StockPositions: [],
+          OptionPositions: [
+            {
+              Ticker: "BPANL600",
+              BuySell: "Comprada",
+              Quantity: "10500.0",
+              StrikePrice: "6.0",
+              OptionType: "Call",
+              MaturityDate: "2025-12-19T00:00:00Z",
+              AveragePrice: { Price: "2.355746", Adjustable: "false" },
+            },
+            {
+              Ticker: "VALEH894",
+              BuySell: "Vendida",
+              Quantity: "11000.0",
+              MaturityDate: "2026-08-21T00:00:00Z",
+              AveragePrice: { Price: "1.2" },
+            },
+          ],
+        },
+      ],
+    };
+    expect(mapPositionPayload(real)).toEqual([
+      {
+        ticker: "BPANL600",
+        market: "option",
+        quantity: 10500,
+        avgPrice: 2.355746,
+        maturity: "2025-12-19",
+      },
+      {
+        ticker: "VALEH894",
+        market: "option",
+        quantity: -11000, // Vendida com Quantity positiva → short
+        avgPrice: 1.2,
+        maturity: "2026-08-21",
+      },
+    ]);
+  });
+
   it("renda fixa/fundos ficam de fora; payload vazio vira lista vazia", () => {
     expect(mapPositionPayload({})).toEqual([]);
     expect(mapPositionPayload({ Equities: [] })).toEqual([]);

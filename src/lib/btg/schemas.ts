@@ -165,6 +165,10 @@ export type BrokerageNotesResponse = z.infer<
 export const equityPositionItemSchema = z.looseObject({
   Ticker: z.string().optional(),
   Quantity: tolerantNumber,
+  /** Opções: "Comprada" | "Vendida" — o sinal pode não vir na Quantity. */
+  BuySell: z.string().optional(),
+  /** Opções: vencimento informado pela própria API (ISO com timezone). */
+  MaturityDate: z.string().optional(),
   AveragePrice: z
     .looseObject({
       Price: tolerantNumber,
