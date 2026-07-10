@@ -3,13 +3,13 @@ import { getDb, schema } from "@/db";
 import { listBusinessDays } from "@/lib/apuracao/business-days";
 import { apurar } from "@/lib/apuracao/engine";
 import {
-  mapNotesPayload,
   mapNotesPayloadWithRaw,
   mapPositionPayload,
   trimPositionPayload,
 } from "@/lib/btg/mapper";
 import { getBtgService } from "@/lib/btg/service";
 import type { InitialPosition } from "@/lib/btg/types";
+import { loadPeriodNotes } from "./load-notes";
 
 const ACTIVE_STATUSES = ["pendente", "buscando", "calculando"] as const;
 
@@ -288,27 +288,15 @@ async function runSlice(job: ApuracaoJobRow): Promise<void> {
     initialPositions = mapPositionPayload(payload);
   }
 
-  const noteRows = await db
-    .select()
-    .from(schema.brokerageNote)
-    .where(
-      and(
-        eq(schema.brokerageNote.accountNumber, job.accountNumber),
-        gte(schema.brokerageNote.tradeDate, job.startDate),
-        lte(schema.brokerageNote.tradeDate, job.endDate),
-      ),
-    );
-
-  // Re-mapeia do payload bruto: o rawPayload é a fonte da verdade e assim
-  // melhorias do mapper valem retroativamente para notas já cacheadas (o
-  // motor dedup-lica por nº nota + conta + mercado, então payloads completos
-  // repetidos entre linhas do mesmo dia não duplicam nada).
-  const result = apurar(
-    noteRows.flatMap((row) =>
-      mapNotesPayload(row.rawPayload, job.accountNumber, row.tradeDate),
-    ),
-    { endDate: job.endDate, initialPositions },
+  // Notas re-mapeadas do payload bruto, carregadas em lotes limitados por
+  // bytes — uma query única com o período inteiro estoura o teto de 64MB de
+  // resposta do Neon em contas volumosas (loadPeriodNotes).
+  const notes = await loadPeriodNotes(
+    job.accountNumber,
+    job.startDate,
+    job.endDate,
   );
+  const result = apurar(notes, { endDate: job.endDate, initialPositions });
 
   await db
     .update(schema.apuracaoJob)

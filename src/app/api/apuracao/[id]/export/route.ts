@@ -1,11 +1,10 @@
-import { and, eq, gte, lte } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { getDb, schema } from "@/db";
-import { dedupeNotes } from "@/lib/apuracao/engine";
 import type { ConsolidatedResult } from "@/lib/apuracao/types";
 import { requireSession } from "@/lib/auth";
-import { mapNotesPayload } from "@/lib/btg/mapper";
 import { buildAuditWorkbook } from "@/lib/export/xlsx-export";
+import { loadPeriodNotes } from "@/lib/jobs/load-notes";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -43,25 +42,13 @@ export async function GET(request: Request, { params }: Params) {
     );
   }
 
-  const noteRows = await db
-    .select()
-    .from(schema.brokerageNote)
-    .where(
-      and(
-        eq(schema.brokerageNote.accountNumber, job.accountNumber),
-        gte(schema.brokerageNote.tradeDate, job.startDate),
-        lte(schema.brokerageNote.tradeDate, job.endDate),
-      ),
-    );
-
-  // `rawPayload` é a resposta do dia inteira, replicada em toda linha
-  // extraída daquele dia — sem dedup, notas de dias com múltiplos negócios
-  // apareceriam repetidas (uma vez por linha lida). dedupeNotes é a mesma
-  // regra de idempotência (nº nota + conta + mercado) que o motor aplica.
-  const notes = dedupeNotes(
-    noteRows.flatMap((row) =>
-      mapNotesPayload(row.rawPayload, job.accountNumber, row.tradeDate),
-    ),
+  // Notas re-mapeadas do bruto em lotes limitados por bytes (mesma carga da
+  // apuração — teto de 64MB de resposta do Neon), já deduplicadas pela regra
+  // do motor (nº nota + conta + mercado).
+  const notes = await loadPeriodNotes(
+    job.accountNumber,
+    job.startDate,
+    job.endDate,
   );
 
   const workbookBytes = buildAuditWorkbook(
