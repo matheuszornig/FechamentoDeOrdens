@@ -177,7 +177,14 @@ export function buildAuditWorkbook(
     );
   }
 
-  // "array" (Uint8Array) em vez de "buffer": evita depender do tipo Buffer do
-  // Node no contrato da função, mais portável para a resposta HTTP.
-  return XLSX.write(wb, { type: "array", bookType: "xlsx" }) as Uint8Array;
+  // type "array" retorna ArrayBuffer em runtime — normaliza para Uint8Array,
+  // que o route fatia em chunks para a resposta em streaming.
+  // compression: xlsx é um ZIP; sem isso o SheetJS grava sem comprimir e uma
+  // conta volumosa gera dezenas de MB (139k negócios ≈ 64MB → ~17MB).
+  const bytes = XLSX.write(wb, {
+    type: "array",
+    bookType: "xlsx",
+    compression: true,
+  }) as ArrayBuffer | Uint8Array;
+  return bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
 }

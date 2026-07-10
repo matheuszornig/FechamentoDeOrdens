@@ -6,6 +6,9 @@ import { requireSession } from "@/lib/auth";
 import { buildAuditWorkbook } from "@/lib/export/xlsx-export";
 import { loadPeriodNotes } from "@/lib/jobs/load-notes";
 
+// Contas volumosas: carregar notas + gerar o workbook leva alguns segundos.
+export const maxDuration = 300;
+
 type Params = { params: Promise<{ id: string }> };
 
 const UUID_RE =
@@ -60,9 +63,20 @@ export async function GET(request: Request, { params }: Params) {
   );
 
   const filename = `apuracao-${job.accountNumber}-${job.startDate}-a-${job.endDate}.xlsx`;
-  // Uint8Array é um BodyInit válido em runtime; o cast contorna a variância
-  // estrita de ArrayBufferLike vs ArrayBuffer nos tipos do lib.dom mais recente.
-  return new NextResponse(workbookBytes as BodyInit, {
+  // Resposta em STREAMING: resposta bufferizada na Vercel é limitada a
+  // ~4,5MB e derruba a função com 500 — o workbook de uma conta volumosa
+  // passa disso mesmo comprimido (caso real: 16,7MB). Em chunks, sem
+  // Content-Length, a função streama sem esse teto.
+  const CHUNK = 1 << 20;
+  const body = new ReadableStream<Uint8Array>({
+    start(controller) {
+      for (let i = 0; i < workbookBytes.length; i += CHUNK) {
+        controller.enqueue(workbookBytes.slice(i, i + CHUNK));
+      }
+      controller.close();
+    },
+  });
+  return new NextResponse(body, {
     headers: {
       "Content-Type":
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
