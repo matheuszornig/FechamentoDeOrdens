@@ -9,5 +9,10 @@ export default async function HomePage() {
     redirect("/login");
   }
 
-  return <ApuracaoScreen userEmail={session.user.email} />;
+  return (
+    <ApuracaoScreen
+      userEmail={session.user.email}
+      isAdmin={session.user.role === "admin"}
+    />
+  );
 }

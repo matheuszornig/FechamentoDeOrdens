@@ -1,7 +1,8 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Download, LogOut } from "lucide-react";
+import { Download, LogOut, Users } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -28,7 +29,13 @@ async function jsonOrThrow(res: Response) {
   return body;
 }
 
-export function ApuracaoScreen({ userEmail }: { userEmail: string }) {
+export function ApuracaoScreen({
+  userEmail,
+  isAdmin,
+}: {
+  userEmail: string;
+  isAdmin: boolean;
+}) {
   const router = useRouter();
   const queryClient = useQueryClient();
   const [jobId, setJobId] = useState<string | null>(null);
@@ -146,6 +153,16 @@ export function ApuracaoScreen({ userEmail }: { userEmail: string }) {
           <span className="hidden text-sm text-muted-foreground sm:inline">
             {userEmail}
           </span>
+          {isAdmin && (
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label="Usuários"
+              render={<Link href="/usuarios" />}
+            >
+              <Users className="size-4" aria-hidden />
+            </Button>
+          )}
           <ThemeToggle />
           <Button
             variant="ghost"
