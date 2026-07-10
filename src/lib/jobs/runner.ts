@@ -2,8 +2,14 @@ import { and, eq, gte, inArray, isNull, lt, lte, or } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { listBusinessDays } from "@/lib/apuracao/business-days";
 import { apurar } from "@/lib/apuracao/engine";
-import { mapNotesPayload, mapNotesPayloadWithRaw } from "@/lib/btg/mapper";
+import {
+  mapNotesPayload,
+  mapNotesPayloadWithRaw,
+  mapPositionPayload,
+  trimPositionPayload,
+} from "@/lib/btg/mapper";
 import { getBtgService } from "@/lib/btg/service";
+import type { InitialPosition } from "@/lib/btg/types";
 
 const ACTIVE_STATUSES = ["pendente", "buscando", "calculando"] as const;
 
@@ -37,6 +43,7 @@ export async function createOrReuseJob(
   accountNumber: string,
   startDate: string,
   endDate: string,
+  includePosition = false,
 ): Promise<{ job: ApuracaoJobRow; reused: boolean }> {
   const db = getDb();
   const [existing] = await db
@@ -47,6 +54,7 @@ export async function createOrReuseJob(
         eq(schema.apuracaoJob.accountNumber, accountNumber),
         eq(schema.apuracaoJob.startDate, startDate),
         eq(schema.apuracaoJob.endDate, endDate),
+        eq(schema.apuracaoJob.includePosition, includePosition),
         inArray(schema.apuracaoJob.status, [...ACTIVE_STATUSES]),
       ),
     )
@@ -64,6 +72,7 @@ export async function createOrReuseJob(
       endDate,
       status: "pendente",
       totalDates,
+      includePosition,
     })
     .returning();
   return { job, reused: false };
@@ -113,6 +122,12 @@ export async function processJobSlice(jobId: string): Promise<void> {
  * isso, o motivo de fato (ex.: "response is too large") fica invisível no
  * errorMessage persistido no job.
  */
+/** D-1 em calendário: "2026-01-01" − 1 dia → "2025-12-31". */
+function addDaysIso(iso: string, days: number): string {
+  const d = new Date(`${iso}T00:00:00Z`);
+  return new Date(d.getTime() + days * 86_400_000).toISOString().slice(0, 10);
+}
+
 function formatError(err: unknown): string {
   if (!(err instanceof Error)) return String(err);
   const cause = err.cause instanceof Error ? err.cause.message : undefined;
@@ -248,6 +263,31 @@ async function runSlice(job: ApuracaoJobRow): Promise<void> {
 
   // Todas as datas resolvidas → apuração.
   await heartbeat("calculando");
+
+  // Posição inicial (opcional): a posição da conta em D-1 do início do
+  // período — quem começou 01/01 apura sobre a carteira de 31/12. Buscada
+  // uma única vez e persistida no job (idempotente entre retomadas).
+  let initialPositions: InitialPosition[] = [];
+  if (job.includePosition) {
+    let payload = job.positionPayload;
+    if (!payload) {
+      const positionDate = addDaysIso(job.startDate, -1);
+      const fetched = await getBtgService().fetchPosition(
+        job.accountNumber,
+        positionDate,
+      );
+      payload =
+        fetched.kind === "position"
+          ? trimPositionPayload(fetched.raw)
+          : { PositionDate: positionDate, Equities: [] };
+      await db
+        .update(schema.apuracaoJob)
+        .set({ positionPayload: payload, updatedAt: new Date() })
+        .where(eq(schema.apuracaoJob.id, job.id));
+    }
+    initialPositions = mapPositionPayload(payload);
+  }
+
   const noteRows = await db
     .select()
     .from(schema.brokerageNote)
@@ -267,7 +307,7 @@ async function runSlice(job: ApuracaoJobRow): Promise<void> {
     noteRows.flatMap((row) =>
       mapNotesPayload(row.rawPayload, job.accountNumber, row.tradeDate),
     ),
-    { endDate: job.endDate },
+    { endDate: job.endDate, initialPositions },
   );
 
   await db

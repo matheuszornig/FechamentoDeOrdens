@@ -1,5 +1,9 @@
-import { mapNotesPayload } from "./mapper";
-import type { BtgService, FetchNotesResult } from "./types";
+import { mapNotesPayload, mapPositionPayload } from "./mapper";
+import type {
+  BtgService,
+  FetchNotesResult,
+  FetchPositionResult,
+} from "./types";
 
 /**
  * Mock determinístico da API de notas do BTG, no formato REAL do payload
@@ -378,6 +382,42 @@ export function generateMockPayload(
   return payload;
 }
 
+/**
+ * Posição determinística no formato real do iaas-api-position: 2–4 papéis do
+ * universo do mock, quantidades e preços médios semeados por (conta + data).
+ */
+export function generateMockPosition(
+  accountNumber: string,
+  isoDate: string,
+): unknown {
+  const rand = mulberry32(hashString(`${accountNumber}|${isoDate}|position`));
+  const stockPositions = BOV_TICKERS.filter(() => rand() < 0.5).map(
+    ([ticker, , basePrice]) => {
+      const qty = (Math.floor(rand() * 20) + 1) * 100;
+      const avg = round2(basePrice * (0.9 + rand() * 0.2));
+      return {
+        Ticker: ticker,
+        Quantity: `${qty}.0`,
+        MarketPrice: String(round2(basePrice)),
+        GrossValue: String(round2(qty * basePrice)),
+        AveragePrice: { Price: String(avg), Adjustable: "false" },
+      };
+    },
+  );
+  return {
+    AccountNumber: accountNumber,
+    PositionDate: `${isoDate}T00:00:00`,
+    Equities: [
+      {
+        ForwardPositions: [],
+        OptionPositions: [],
+        StockLendingPositions: [],
+        StockPositions: stockPositions,
+      },
+    ],
+  };
+}
+
 export class MockBtgService implements BtgService {
   async fetchNotes(
     accountNumber: string,
@@ -390,5 +430,13 @@ export class MockBtgService implements BtgService {
       raw: payload,
       notes: mapNotesPayload(payload, accountNumber, isoDate),
     };
+  }
+
+  async fetchPosition(
+    accountNumber: string,
+    isoDate: string,
+  ): Promise<FetchPositionResult> {
+    const raw = generateMockPosition(accountNumber, isoDate);
+    return { kind: "position", raw, positions: mapPositionPayload(raw) };
   }
 }

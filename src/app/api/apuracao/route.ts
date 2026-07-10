@@ -26,8 +26,13 @@ export async function POST(request: Request) {
     );
   }
 
-  const { conta, dataInicio, dataFim } = parsed.data;
-  const { job, reused } = await createOrReuseJob(conta, dataInicio, dataFim);
+  const { conta, dataInicio, dataFim, posicaoInicial } = parsed.data;
+  const { job, reused } = await createOrReuseJob(
+    conta,
+    dataInicio,
+    dataFim,
+    posicaoInicial,
+  );
 
   if (!reused) {
     after(() => processJobSlice(job.id));

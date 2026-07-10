@@ -38,6 +38,8 @@ export const apuracaoFilterSchema = z
       .regex(/^\d+$/, "A conta deve conter apenas dígitos"),
     dataInicio: z.string().regex(ISO_DATE, "Data de início inválida"),
     dataFim: z.string().regex(ISO_DATE, "Data de fim inválida"),
+    /** Semear com a posição da conta em D-1 da data de início (opcional). */
+    posicaoInicial: z.boolean().optional().default(false),
   })
   .superRefine((value, ctx) => {
     if (value.dataFim < value.dataInicio) {
@@ -65,3 +67,5 @@ export const apuracaoFilterSchema = z
   });
 
 export type ApuracaoFilter = z.infer<typeof apuracaoFilterSchema>;
+/** Tipo de ENTRADA do schema (posicaoInicial opcional) — usado pelo RHF. */
+export type ApuracaoFilterInput = z.input<typeof apuracaoFilterSchema>;

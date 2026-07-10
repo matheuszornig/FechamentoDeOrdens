@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/popover";
 import {
   type ApuracaoFilter,
+  type ApuracaoFilterInput,
   apuracaoFilterSchema,
   maxEndDateIso,
 } from "@/lib/apuracao/validation";
@@ -106,9 +107,14 @@ export function FilterCard({
     handleSubmit,
     control,
     formState: { errors },
-  } = useForm<ApuracaoFilter>({
+  } = useForm<ApuracaoFilterInput, unknown, ApuracaoFilter>({
     resolver: zodResolver(apuracaoFilterSchema),
-    defaultValues: { conta: "", dataInicio: "", dataFim: "" },
+    defaultValues: {
+      conta: "",
+      dataInicio: "",
+      dataFim: "",
+      posicaoInicial: false,
+    },
   });
 
   return (
@@ -170,6 +176,19 @@ export function FilterCard({
             <Play className="mr-1 size-4" aria-hidden />
             Apurar
           </Button>
+          <label
+            htmlFor="posicaoInicial"
+            className="flex cursor-pointer items-center gap-2 text-sm sm:col-span-4"
+          >
+            <input
+              id="posicaoInicial"
+              type="checkbox"
+              className="size-4 cursor-pointer accent-primary"
+              {...register("posicaoInicial")}
+            />
+            Incluir posição inicial da conta (D-1 da data de início) — vendas no
+            período realizam contra o preço médio da carteira
+          </label>
         </form>
       </CardContent>
     </Card>

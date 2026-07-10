@@ -3,11 +3,14 @@ import {
   type BovNote,
   type BrokerageNotesResponse,
   brokerageNotesResponseSchema,
+  type EquityPositionItem,
   type LoanNote,
+  positionResponseSchema,
 } from "./schemas";
 import {
   EMPTY_COSTS,
   type FutureAdjustment,
+  type InitialPosition,
   type LoanLine,
   type Market,
   type NormalizedNote,
@@ -522,4 +525,56 @@ export function mapNotesPayloadWithRaw(
   fallbackDate: string,
 ): MappedNote[] {
   return mapPayload(payload, accountNumber, fallbackDate);
+}
+
+// ---------------------------------------------------------------------------
+// Posição (iaas-api-position) — só renda variável (Equities)
+// ---------------------------------------------------------------------------
+
+/**
+ * Extrai as posições de renda variável do payload de posição: ações/ETFs/FIIs
+ * (StockPositions → bov) e opções (OptionPositions → option). Quantidade
+ * assinada (>0 comprado, <0 vendido); preço médio de AveragePrice.Price.
+ * Itens sem ticker, sem quantidade ou zerados são ignorados.
+ */
+export function mapPositionPayload(payload: unknown): InitialPosition[] {
+  const parsed = positionResponseSchema.parse(payload ?? {});
+  const positions: InitialPosition[] = [];
+
+  const push = (
+    items: EquityPositionItem[] | null | undefined,
+    market: Market,
+  ) => {
+    for (const item of items ?? []) {
+      const ticker =
+        typeof item.Ticker === "string" ? item.Ticker.trim() : null;
+      const quantity = toNumber(item.Quantity);
+      if (!ticker || quantity === 0) continue;
+      positions.push({
+        ticker,
+        market,
+        quantity,
+        avgPrice: toNumber(item.AveragePrice?.Price),
+      });
+    }
+  };
+
+  for (const section of parsed.Equities ?? []) {
+    push(section.StockPositions, "bov");
+    push(section.OptionPositions, "option");
+  }
+  return positions;
+}
+
+/**
+ * Reduz a resposta de posição ao que o app usa (renda variável), para
+ * persistir no job sem carregar fundos/renda fixa/caixa — mantém a filosofia
+ * de guardar o bruto (re-mapeável retroativamente), mas só a seção relevante.
+ */
+export function trimPositionPayload(payload: unknown): object {
+  const parsed = positionResponseSchema.parse(payload ?? {});
+  return {
+    PositionDate: parsed.PositionDate,
+    Equities: parsed.Equities ?? [],
+  };
 }

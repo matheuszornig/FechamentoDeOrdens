@@ -729,3 +729,104 @@ describe("série diária de P/L", () => {
     expect(result.totais.resultadoLiquido).toBe(60);
   });
 });
+
+describe("posição inicial (D-1)", () => {
+  it("venda de posição semeada realiza contra o preço médio da carteira", () => {
+    const result = apurar(
+      [
+        makeNote({
+          date: "2026-01-05",
+          costs: { ...EMPTY_COSTS, corretagem: 4 },
+          trades: [
+            trade({ ticker: "VALE3", side: "sell", quantity: 100, price: 12 }),
+          ],
+        }),
+      ],
+      {
+        initialPositions: [
+          { ticker: "VALE3", market: "bov", quantity: 300, avgPrice: 10 },
+        ],
+      },
+    );
+    const t = result.porTicker.find((x) => x.ticker === "VALE3");
+    expect(t?.resultadoBruto).toBe(200); // (12 − 10) × 100
+    expect(t?.quantidadeFechada).toBe(100);
+    expect(t?.resultadoLiquido).toBe(196);
+    // Restante da posição semeada segue aberto, ao preço médio original.
+    expect(result.posicoesAbertas).toEqual([
+      {
+        ticker: "VALE3",
+        mercado: "bov",
+        side: "comprado",
+        quantidade: 200,
+        precoMedio: 10,
+      },
+    ]);
+  });
+
+  it("posição semeada não mexida só aparece em posições abertas (sem linha de resultado)", () => {
+    const result = apurar([], {
+      initialPositions: [
+        { ticker: "BRAV3", market: "bov", quantity: 1600, avgPrice: 18.8 },
+      ],
+    });
+    expect(result.porTicker).toHaveLength(0);
+    expect(result.posicoesAbertas).toEqual([
+      {
+        ticker: "BRAV3",
+        mercado: "bov",
+        side: "comprado",
+        quantidade: 1600,
+        precoMedio: 18.8,
+      },
+    ]);
+  });
+
+  it("posição semeada vendida (short) fecha com recompra", () => {
+    const result = apurar(
+      [
+        makeNote({
+          date: "2026-01-05",
+          trades: [
+            trade({ ticker: "PETR4", side: "buy", quantity: 50, price: 9 }),
+          ],
+        }),
+      ],
+      {
+        initialPositions: [
+          { ticker: "PETR4", market: "bov", quantity: -50, avgPrice: 11 },
+        ],
+      },
+    );
+    const t = result.porTicker.find((x) => x.ticker === "PETR4");
+    expect(t?.resultadoBruto).toBe(100); // short: (11 − 9) × 50
+    expect(result.posicoesAbertas).toHaveLength(0);
+  });
+
+  it("compra no período soma à posição semeada pelo preço médio ponderado", () => {
+    const result = apurar(
+      [
+        makeNote({
+          date: "2026-01-05",
+          trades: [
+            trade({ ticker: "ITUB4", side: "buy", quantity: 100, price: 20 }),
+          ],
+        }),
+      ],
+      {
+        initialPositions: [
+          { ticker: "ITUB4", market: "bov", quantity: 100, avgPrice: 10 },
+        ],
+      },
+    );
+    expect(result.posicoesAbertas).toEqual([
+      {
+        ticker: "ITUB4",
+        mercado: "bov",
+        side: "comprado",
+        quantidade: 200,
+        precoMedio: 15, // (100×10 + 100×20) / 200
+      },
+    ]);
+  });
+});
